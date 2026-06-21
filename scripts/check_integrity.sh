@@ -1,47 +1,77 @@
 #!/usr/bin/env bash
-# Fails (exit 1) if the agent reached a green build by cheating.
-# Run AFTER `lake build` succeeds. CI and the routine both call this.
+# Honesty gate. Three outcomes:
+#   exit 1                 -> INTEGRITY FAILURE (regression or cheating). Never commit.
+#   exit 0 + "IN PROGRESS" -> healthy intermediate state; the one goal is still open.
+#   exit 0 + "COMPLETE"    -> main_theorem proven with a clean axiom list.
+# Run AFTER `lake build`. CI and the routine both call this.
 set -uo pipefail
 
 SRC="ConjectureProof"
 STATEMENT="ConjectureProof/Statement.lean"
+MAIN="ConjectureProof/Main.lean"
 FAIL=0
-note() { echo "❌ INTEGRITY FAIL: $*"; FAIL=1; }
+fail() { echo "X FAIL: $*"; FAIL=1; }
 
-echo "== 1. Conjecture statement is frozen =="
+# Portable sha256 verify: Linux has `sha256sum`, macOS has `shasum -a 256`.
+if command -v sha256sum >/dev/null 2>&1; then
+  sha_check() { sha256sum -c "$1" >/dev/null 2>&1; }
+elif command -v shasum >/dev/null 2>&1; then
+  sha_check() { shasum -a 256 -c "$1" >/dev/null 2>&1; }
+else
+  sha_check() { return 2; }   # no tool available; cannot verify
+fi
+
+echo "== 1. Frozen conjecture =="
 if [ -f scripts/statement.sha256 ]; then
-  if sha256sum -c scripts/statement.sha256 >/dev/null 2>&1; then
-    echo "ok: $STATEMENT unchanged"
+  if sha_check scripts/statement.sha256; then
+    echo "ok: Statement.lean unchanged"
   else
-    note "$STATEMENT checksum mismatch — the conjecture was altered."
+    fail "Statement.lean changed (or no sha256 tool); the conjecture is frozen."
   fi
 else
-  echo "warn: scripts/statement.sha256 missing. Create it once with:"
-  echo "      sha256sum $STATEMENT > scripts/statement.sha256"
+  echo "warn: scripts/statement.sha256 missing. Create it once (macOS):"
+  echo "      shasum -a 256 $STATEMENT > scripts/statement.sha256"
 fi
 
-echo "== 2. No proof placeholders or trust escapes in our sources =="
-grep -rEn '\bsorry\b|\badmit\b'      "$SRC" && note "found 'sorry'/'admit' (incomplete proof)."
-grep -rEn '\bnative_decide\b'        "$SRC" && note "found 'native_decide' (disallowed)."
-grep -rEn '\bunsafe\b|@\[implemented_by' "$SRC" && note "found 'unsafe'/implemented_by."
-grep -rEn '^\s*axiom\b'              "$SRC" && note "found an 'axiom' declaration (assumptions ≠ proofs)."
+echo "== 2. No cheats in the workspace (everything except the one sanctioned goal) =="
+for f in "$STATEMENT" "ConjectureProof/Lemmas.lean" "ConjectureProof/Audit.lean" "ConjectureProof.lean"; do
+  [ -f "$f" ] || continue
+  grep -nE '\bsorry\b|\badmit\b' "$f" && fail "$f contains a placeholder (sorry/admit)."
+done
+grep -rnE '\bnative_decide\b'        "$SRC" && fail "native_decide is disallowed."
+grep -rnE '\bunsafe\b|@\[implemented_by' "$SRC" && fail "unsafe/implemented_by is disallowed."
+grep -rnE '^\s*axiom\b'              "$SRC" && fail "an 'axiom' declaration was introduced."
 
-echo "== 3. Final theorem proves the FROZEN proposition, unweakened =="
-if grep -rEn 'main_theorem\s*:\s*MainProp\b' "$SRC" >/dev/null; then
-  echo "ok: 'theorem main_theorem : MainProp' present"
+echo "== 3. Goal present and unweakened =="
+if grep -nE 'main_theorem\s*:\s*MainProp\b' "$MAIN" >/dev/null; then
+  echo "ok: 'main_theorem : MainProp' present"
 else
-  note "could not find 'main_theorem : MainProp' — type may have been weakened."
+  fail "main_theorem : MainProp not found in Main.lean (type may be weakened)."
+fi
+N_MAIN_PH=$(grep -cE '\bsorry\b|\badmit\b' "$MAIN" 2>/dev/null || true)
+N_MAIN_PH=${N_MAIN_PH:-0}
+if [ "$N_MAIN_PH" -gt 1 ]; then
+  fail "Main.lean has more than one placeholder; only the single goal marker is allowed."
 fi
 
-echo "== 4. Gold standard: axiom audit of the final theorem =="
+if [ "$FAIL" -ne 0 ]; then echo "=== INTEGRITY FAILURE ==="; exit 1; fi
+
+echo "== 4. Done-ness: axiom audit =="
+if [ "$N_MAIN_PH" -ge 1 ]; then
+  echo "[IN PROGRESS] main_theorem still holds the open placeholder."
+  echo "   Workspace is clean. Keep proving lemmas in Lemmas.lean."
+  exit 0
+fi
 if command -v lake >/dev/null 2>&1; then
   AX="$(lake env lean ConjectureProof/Audit.lean 2>/dev/null || true)"
   echo "$AX"
-  echo "$AX" | grep -q 'sorryAx' && note "main_theorem depends on sorryAx — proof is incomplete."
-  echo "→ Confirm the list above is ONLY: propext, Classical.choice, Quot.sound."
+  if echo "$AX" | grep -q 'sorryAx'; then
+    echo "X FAIL: main_theorem is placeholder-free in source but depends on sorryAx."
+    exit 1
+  fi
+  echo "[COMPLETE] main_theorem proven."
+  echo "   Confirm the axiom list is only: propext, Classical.choice, Quot.sound."
 else
-  echo "warn: lake not on PATH; skipping axiom audit (it runs in CI / the routine)."
+  echo "warn: lake not on PATH; the axiom audit will run in CI."
 fi
-
-if [ "$FAIL" -ne 0 ]; then echo "=== INTEGRITY CHECK FAILED ==="; exit 1; fi
-echo "=== integrity check passed ==="
+exit 0

@@ -5,7 +5,8 @@ human to ask; the prompt and the repo are everything you have.
 
 Read `CLAUDE.md` and `blueprint/PROGRESS.md` first. Follow CLAUDE.md's hard rules
 exactly — especially: never edit `ConjectureProof/Statement.lean`; never use
-`sorry`, `admit`, `native_decide`, `unsafe`, or `axiom`.
+`native_decide`, `unsafe`, or `axiom`. Exactly one `sorry`/`admit` is
+permissible in `main_theorem` (`Main.lean`).
 
 Your job this session:
 1. From `blueprint/PROGRESS.md`, choose the next unproven frontier lemma (its

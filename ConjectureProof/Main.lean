@@ -1,13 +1,15 @@
 /-
-  FINAL ASSEMBLY.
+  FINAL GOAL — the open conjecture.
 
-  The agent must produce exactly this declaration:
+  The proof below is intentionally the single placeholder the whole project
+  exists to discharge.  The agent must replace it with a real proof assembled
+  from `Lemmas.lean`.
 
-      theorem main_theorem : MainProp := <proof>
-
-  The type MUST be `MainProp` (the frozen proposition). The integrity check
-  greps for the literal signature `main_theorem : MainProp`, so the agent
-  cannot quietly prove a weaker statement.
+  Rules (enforced by scripts/check_integrity.sh):
+    • this is the ONLY placeholder permitted anywhere; never introduce another;
+    • `Lemmas.lean` must stay fully proven at every commit;
+    • never change the type away from `MainProp`.
+  "Done" = this placeholder is discharged and the axiom audit is clean.
 -/
 import ConjectureProof.Statement
 import ConjectureProof.Lemmas
@@ -15,9 +17,6 @@ import ConjectureProof.Lemmas
 namespace ConjectureProof
 
 theorem main_theorem : MainProp := by
-  unfold MainProp
-  intro n h
-  unfold IsExample at h
-  omega
+  sorry
 
 end ConjectureProof

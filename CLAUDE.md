@@ -8,12 +8,14 @@ proof.
 
 1. **Never edit `ConjectureProof/Statement.lean`.** It is the frozen conjecture.
    Its checksum is verified; any change fails the build.
-2. **Never use `sorry`, `admit`, `native_decide`, `unsafe`, or `axiom`.** A proof
-   that needs these is not done. Leave unfinished lemmas commented out instead.
+2. Exactly one placeholder is allowed: the pre-placed sorry in main_theorem (Main.lean), 
+   marking the open goal. Never add sorry/admit anywhere else — Lemmas.lean must be 
+   fully proven at every commit. Never use native_decide, unsafe, or axiom. 
+   "Done" = the main_theorem placeholder is discharged and the axiom audit is clean.
 3. The final goal is `theorem main_theorem : MainProp` in `ConjectureProof/Main.lean`,
    with the type exactly `MainProp`. Do not change the type.
 4. A change counts as progress ONLY if `lake build` succeeds **and**
-   `bash scripts/check_integrity.sh` passes.
+   `bash scripts/check_integrity.sh` is not in FAILURE.
 
 ## Workflow each run
 
