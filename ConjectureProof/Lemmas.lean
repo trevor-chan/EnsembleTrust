@@ -82,6 +82,59 @@ lemma PI_pos (P : Params) (n k : ℕ) (hn : 1 ≤ n) (hk : k ≤ n) : 0 < PI P n
       rw [if_pos (by omega), M_corner_I]
       positivity
 
+/-! ## B_swap — the `c ↔ i` symmetry of the index set. -/
+
+/-- The multinomial coefficient is symmetric under exchanging the two counts:
+`C(n,c)·C(n-c,i) = C(n,i)·C(n-i,c)` (both equal `n! / (c! i! (n-c-i)!)`). -/
+lemma choose_swap (n c i : ℕ) :
+    n.choose c * (n - c).choose i = n.choose i * (n - i).choose c := by
+  have h1 := Nat.choose_mul (n := n) (k := c + i) (s := c) (Nat.le_add_right c i)
+  have h2 := Nat.choose_mul (n := n) (k := c + i) (s := i) (Nat.le_add_left i c)
+  have e1 : c + i - c = i := by omega
+  have e2 : c + i - i = c := by omega
+  rw [e1] at h1
+  rw [e2] at h2
+  rw [Nat.choose_symm_add] at h1
+  rw [← h1]; exact h2
+
+/-- The parameter triple with the correct and specious probabilities exchanged. -/
+def swap (P : Params) : Params where
+  pC := P.pI
+  pI := P.pC
+  pR := P.pR
+  pC_pos := P.pI_pos
+  pI_pos := P.pC_pos
+  pR_pos := P.pR_pos
+  sum_one := by have := P.sum_one; linarith
+
+@[simp] lemma swap_pC (P : Params) : (swap P).pC = P.pI := rfl
+@[simp] lemma swap_pI (P : Params) : (swap P).pI = P.pC := rfl
+@[simp] lemma swap_pR (P : Params) : (swap P).pR = P.pR := rfl
+
+/-- `swap` is an involution. -/
+lemma swap_swap (P : Params) : swap (swap P) = P := rfl
+
+/-- The multinomial weight is symmetric: exchanging the two counts is the same
+as swapping the two probabilities. -/
+lemma M_swap (P : Params) (n c i : ℕ) : M P n c i = M (swap P) n i c := by
+  simp only [M, swap_pC, swap_pI, swap_pR]
+  have hch : (n.choose c : ℝ) * ((n - c).choose i : ℝ)
+      = (n.choose i : ℝ) * ((n - i).choose c : ℝ) := by
+    exact_mod_cast choose_swap n c i
+  have hsub : n - c - i = n - i - c := by omega
+  rw [hsub]
+  linear_combination (P.pC ^ c * P.pI ^ i * P.pR ^ (n - i - c)) * hch
+
+/-- The specious-consensus probability for `P` equals the correct-consensus
+probability for the swapped parameters: reindex the double sum by `c ↔ i`. -/
+lemma B_swap (P : Params) (n k : ℕ) : PI P n k = PC (swap P) n k := by
+  unfold PI PC
+  apply Finset.sum_congr rfl
+  intro a _
+  apply Finset.sum_congr rfl
+  intro b _
+  rw [M_swap P n b a, Nat.add_comm b a]
+
 /-! ## A_trust_iff_ratio — trust-monotonicity is ratio-monotonicity. -/
 
 /-- Abstract monotonicity: for positive `a b c d`, `a/(a+b) < c/(c+d)` iff the

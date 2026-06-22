@@ -33,9 +33,17 @@ Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
     `Trust(k+1) > Trust(k) ↔ PC(k+1)·PI(k) > PC(k)·PI(k+1)` (avoids division).
     Helper `trust_lt_iff`: for positives, `a/(a+b) < c/(c+d) ↔ a*d < c*b` via
     `div_lt_div_iff₀` + `nlinarith`.
-- [ ] **B_swap** — `PI P n k = PC P' n k` where `P'` swaps pC and pI.
+- [x] **B_swap** — `PI P n k = PC P' n k` where `P'` swaps pC and pI.
   - reindex the double sum by `c ↔ i`; `M` is symmetric under the swap.
-  - depends on: (none) · status: TODO
+  - depends on: (none) · status: **PROVED** (as `B_swap`, with `swap P` the
+    swapped params). Key pieces:
+    - `choose_swap`: `C(n,c)·C(n-c,i) = C(n,i)·C(n-i,c)` via `Nat.choose_mul`
+      (twice, with `k=c+i`) + `Nat.choose_symm_add`.
+    - `M_swap`: `M P n c i = M (swap P) n i c`, by `choose_swap` (cast to ℝ) +
+      `n-c-i = n-i-c` + `linear_combination`.
+    - `B_swap` itself: `Finset.sum_congr` term-by-term (index sets already match)
+      + `M_swap` + `Nat.add_comm`.
+    - Also have `swap_swap : swap (swap P) = P` (`rfl`) for the symmetry trick.
 - [ ] **B_branches** — from B_swap: pC = pI ⟹ ρ constant (Trust ≡ ½);
     pC < pI ⟹ ρ strictly decreasing. Gives the two non-`<½` directions.
   - depends on: B_swap, C_core · status: TODO
