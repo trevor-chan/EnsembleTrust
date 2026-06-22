@@ -189,6 +189,40 @@ lemma C_delta_PI (P : Params) (n k : ℕ) (hk : k ≤ n) :
   rw [B_swap P n k, B_swap P n (k + 1), C_delta_PC (swap P) n k hk, swap_pC,
     swap_pI, Bsum_swap]
 
+/-! ## Slice decomposition — `PC`/`PI` as sums of per-`c` slices.
+
+Each fixed correct-count `c ≥ k` contributes `C(n,c)·pC^c·Bsum(n,c,pI)` to `PC`
+(`Bsum P n c x` is the boundary generator `S_c(x)` for that slice).  This rewrites
+the consensus probabilities as single sums over the winning count, the form used
+to attack `C_core` slice-by-slice. -/
+
+/-- The inner `c`-slice of the correct-consensus sum factors as
+`C(n,c)·pC^c·Bsum(n,c,pI)`. -/
+lemma PC_inner (P : Params) (n c : ℕ) :
+    (∑ i ∈ Finset.range c, if c + i ≤ n then M P n c i else 0)
+      = (n.choose c : ℝ) * P.pC ^ c * Bsum P n c P.pI := by
+  rw [Bsum, Finset.mul_sum]
+  apply Finset.sum_congr rfl
+  intro i _
+  split_ifs with h
+  · unfold M; ring
+  · ring
+
+/-- `PC` as a sum of per-`c` slices. -/
+lemma PC_slice (P : Params) (n k : ℕ) :
+    PC P n k
+      = ∑ c ∈ Finset.Icc k n, (n.choose c : ℝ) * P.pC ^ c * Bsum P n c P.pI := by
+  unfold PC
+  exact Finset.sum_congr rfl (fun c _ => PC_inner P n c)
+
+/-- `PI` as a sum of per-`c` slices, via the `c ↔ i` symmetry. -/
+lemma PI_slice (P : Params) (n k : ℕ) :
+    PI P n k
+      = ∑ c ∈ Finset.Icc k n, (n.choose c : ℝ) * P.pI ^ c * Bsum P n c P.pC := by
+  rw [B_swap, PC_slice]
+  refine Finset.sum_congr rfl (fun c _ => ?_)
+  rw [swap_pC, swap_pI, Bsum_swap]
+
 /-- The ratio step rewritten via the boundary increments: cross-multiplied
 ratio growth is equivalent to a comparison of the two increments weighted by the
 opposite probability. -/
