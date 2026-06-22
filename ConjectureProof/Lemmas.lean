@@ -82,4 +82,24 @@ lemma PI_pos (P : Params) (n k : ℕ) (hn : 1 ≤ n) (hk : k ≤ n) : 0 < PI P n
       rw [if_pos (by omega), M_corner_I]
       positivity
 
+/-! ## A_trust_iff_ratio — trust-monotonicity is ratio-monotonicity. -/
+
+/-- Abstract monotonicity: for positive `a b c d`, `a/(a+b) < c/(c+d)` iff the
+cross-product `a*d < c*b`.  (`x ↦ x/(x+y)` is increasing in the ratio `x/y`.) -/
+lemma trust_lt_iff {a b c d : ℝ} (ha : 0 < a) (hb : 0 < b) (hc : 0 < c)
+    (hd : 0 < d) : a / (a + b) < c / (c + d) ↔ a * d < c * b := by
+  rw [div_lt_div_iff₀ (by positivity) (by positivity)]
+  constructor <;> intro h <;> nlinarith
+
+/-- Raising the threshold raises trust iff the consensus *ratio* `PC/PI` rises,
+expressed in cross-multiplied form (no division). -/
+lemma A_trust_iff_ratio (P : Params) (n k : ℕ) (hn : 1 ≤ n) (hk1 : k ≤ n)
+    (hk2 : k + 1 ≤ n) :
+    Trust P n (k + 1) > Trust P n k ↔
+      PC P n (k + 1) * PI P n k > PC P n k * PI P n (k + 1) := by
+  unfold Trust
+  have h := trust_lt_iff (PC_pos P n k hn hk1) (PI_pos P n k hn hk1)
+    (PC_pos P n (k + 1) hn hk2) (PI_pos P n (k + 1) hn hk2)
+  rw [gt_iff_lt, h]
+
 end ConjectureProof

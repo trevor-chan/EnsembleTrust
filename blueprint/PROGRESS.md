@@ -27,9 +27,12 @@ Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
     `= pC^n` / `pI^n`, by `simp`). Proof: `Finset.sum_pos'` twice (outer over the
     count, inner over the plurality index), exhibiting the corner `c=n,i=0`
     (resp. `i=n,c=0`).
-- [ ] **A_trust_iff_ratio** — `Trust P n (k+1) > Trust P n k ↔ ρ(k+1) > ρ(k)`.
+- [x] **A_trust_iff_ratio** — `Trust P n (k+1) > Trust P n k ↔ ρ(k+1) > ρ(k)`.
   - algebra over positives; cross-multiply with A0_pos.
-  - depends on: A0_pos · status: TODO
+  - depends on: A0_pos · status: **PROVED**. Stated in cross-multiplied form:
+    `Trust(k+1) > Trust(k) ↔ PC(k+1)·PI(k) > PC(k)·PI(k+1)` (avoids division).
+    Helper `trust_lt_iff`: for positives, `a/(a+b) < c/(c+d) ↔ a*d < c*b` via
+    `div_lt_div_iff₀` + `nlinarith`.
 - [ ] **B_swap** — `PI P n k = PC P' n k` where `P'` swaps pC and pI.
   - reindex the double sum by `c ↔ i`; `M` is symmetric under the swap.
   - depends on: (none) · status: TODO
