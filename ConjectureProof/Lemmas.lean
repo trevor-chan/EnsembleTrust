@@ -17,6 +17,7 @@ import ConjectureProof.Statement
 namespace ConjectureProof
 
 open Finset
+open scoped Nat
 
 /-! ## Basic facts about the multinomial weight `M`. -/
 
@@ -92,7 +93,7 @@ lemma PI_pos (P : Params) (n k : ℕ) (hn : 1 ≤ n) (hk : k ≤ n) : 0 < PI P n
 /-! ## B_swap — the `c ↔ i` symmetry of the index set. -/
 
 /-- The multinomial coefficient is symmetric under exchanging the two counts:
-`C(n,c)·C(n-c,i) = C(n,i)·C(n-i,c)` (both equal `n! / (c! i! (n-c-i)!)`). -/
+`C(n,c)·C(n-c,i) = C(n,i)·C(n-i,c)` (both equal `n! / (c! i! (n-c-i) !)`). -/
 lemma choose_swap (n c i : ℕ) :
     n.choose c * (n - c).choose i = n.choose i * (n - i).choose c := by
   have h1 := Nat.choose_mul (n := n) (k := c + i) (s := c) (Nat.le_add_right c i)
@@ -222,6 +223,98 @@ lemma PI_slice (P : Params) (n k : ℕ) :
   rw [B_swap, PC_slice]
   refine Finset.sum_congr rfl (fun c _ => ?_)
   rw [swap_pC, swap_pI, Bsum_swap]
+
+/-! ## Binomial-coefficient inequality — the combinatorial core of a slice.
+
+`bracket_c`'s double-sum kernel is antisymmetric under `(a,b) ↦ (b+u, a−u)`, so its
+positivity reduces to a weight comparison that is, after clearing the `pR` factors,
+the pure inequality `binom_key`.  No probabilities appear here. -/
+
+/-- A factorial monotonicity template: for `p ≤ q`,
+`(p+t) !·q! ≤ (q+t) !·p!`.  (Equivalent to `C(p+t,t) ≤ C(q+t,t)`.) -/
+lemma fact_template (p q t : ℕ) (h : p ≤ q) :
+    (p + t) ! * q ! ≤ (q + t) ! * p ! := by
+  have hp : (p + t).choose t * t ! * p ! = (p + t) ! := by
+    have := Nat.choose_mul_factorial_mul_factorial (show t ≤ p + t by omega)
+    rwa [Nat.add_sub_cancel] at this
+  have hq : (q + t).choose t * t ! * q ! = (q + t) ! := by
+    have := Nat.choose_mul_factorial_mul_factorial (show t ≤ q + t by omega)
+    rwa [Nat.add_sub_cancel] at this
+  have hc : (p + t).choose t ≤ (q + t).choose t := Nat.choose_le_choose t (by omega)
+  calc (p + t) ! * q !
+      = ((p + t).choose t * t ! * p !) * q ! := by rw [hp]
+    _ = ((p + t).choose t * t ! * q !) * p ! := by ring
+    _ ≤ ((q + t).choose t * t ! * q !) * p ! := by gcongr
+    _ = (q + t) ! * p ! := by rw [hq]
+
+/-- **The combinatorial core.**  For `s < b` (any `N, u`):
+`C(N,b+u)·C(N+u,s) ≤ C(N,u+s)·C(N+u,b)`.
+Both sides equal `N!·(N+u) !` divided by a product of four factorials; the claim is
+that the left multiplier dominates the right, which `fact_template` supplies. -/
+lemma binom_key (N u s b : ℕ) (hsb : s < b) :
+    N.choose (b + u) * (N + u).choose s ≤ N.choose (u + s) * (N + u).choose b := by
+  by_cases hbu : b + u ≤ N
+  · -- the generic case: clear to factorials and compare the multipliers
+    have hus : u + s ≤ N := by omega
+    have hb : b ≤ N + u := by omega
+    have hs : s ≤ N + u := by omega
+    set L := N.choose (b + u) * (N + u).choose s with hL_def
+    set R := N.choose (u + s) * (N + u).choose b with hR_def
+    set Da := (u + s) ! * (N - (u + s)) ! * (b ! * (N + u - b) !) with hDa_def
+    set Db := (b + u) ! * (N - (b + u)) ! * (s ! * (N + u - s) !) with hDb_def
+    have e1 : N.choose (u + s) * (u + s) ! * (N - (u + s)) ! = N ! :=
+      Nat.choose_mul_factorial_mul_factorial hus
+    have e2 : (N + u).choose b * b ! * (N + u - b) ! = (N + u) ! :=
+      Nat.choose_mul_factorial_mul_factorial hb
+    have e3 : N.choose (b + u) * (b + u) ! * (N - (b + u)) ! = N ! :=
+      Nat.choose_mul_factorial_mul_factorial hbu
+    have e4 : (N + u).choose s * s ! * (N + u - s) ! = (N + u) ! :=
+      Nat.choose_mul_factorial_mul_factorial hs
+    -- both `L·Db` and `R·Da` reorganise to `N!·(N+u) !`
+    have hLDb : L * Db = N ! * (N + u) ! := by
+      have : L * Db
+          = (N.choose (b + u) * (b + u) ! * (N - (b + u)) !)
+            * ((N + u).choose s * s ! * (N + u - s) !) := by
+        rw [hL_def, hDb_def]; ring
+      rw [this, e3, e4]
+    have hRDa : R * Da = N ! * (N + u) ! := by
+      have : R * Da
+          = (N.choose (u + s) * (u + s) ! * (N - (u + s)) !)
+            * ((N + u).choose b * b ! * (N + u - b) !) := by
+        rw [hR_def, hDa_def]; ring
+      rw [this, e1, e2]
+    have E : L * Db = R * Da := hLDb.trans hRDa.symm
+    -- the multiplier comparison `Da ≤ Db`, from two `fact_template`s
+    have i1 : (u + s) ! * b ! ≤ (b + u) ! * s ! := by
+      have h := fact_template s b u (le_of_lt hsb)
+      rwa [Nat.add_comm s u] at h
+    have i2 : (N - (u + s)) ! * (N + u - b) ! ≤ (N - (b + u)) ! * (N + u - s) ! := by
+      have h := fact_template (N - (b + u)) (N - (u + s)) (2 * u) (by omega)
+      have ea : N - (b + u) + 2 * u = N + u - b := by omega
+      have eb : N - (u + s) + 2 * u = N + u - s := by omega
+      rw [ea, eb] at h
+      calc (N - (u + s)) ! * (N + u - b) !
+          = (N + u - b) ! * (N - (u + s)) ! := by ring
+        _ ≤ (N + u - s) ! * (N - (b + u)) ! := h
+        _ = (N - (b + u)) ! * (N + u - s) ! := by ring
+    have hDa_le_Db : Da ≤ Db := by
+      calc Da = ((u + s) ! * b !) * ((N - (u + s)) ! * (N + u - b) !) := by
+                rw [hDa_def]; ring
+        _ ≤ ((b + u) ! * s !) * ((N - (b + u)) ! * (N + u - s) !) := Nat.mul_le_mul i1 i2
+        _ = Db := by rw [hDb_def]; ring
+    have hDa_pos : 0 < Da := by
+      rw [hDa_def]
+      exact Nat.mul_pos (Nat.mul_pos (Nat.factorial_pos _) (Nat.factorial_pos _))
+        (Nat.mul_pos (Nat.factorial_pos _) (Nat.factorial_pos _))
+    -- conclude by cancelling the positive `Da`
+    have hfin : L * Da ≤ R * Da :=
+      calc L * Da ≤ L * Db := Nat.mul_le_mul (le_refl L) hDa_le_Db
+        _ = R * Da := E
+    exact Nat.le_of_mul_le_mul_right hfin hDa_pos
+  · -- degenerate: `C(N,b+u) = 0`, so the left side vanishes
+    have hz : N.choose (b + u) = 0 := Nat.choose_eq_zero_of_lt (by omega)
+    rw [hz, Nat.zero_mul]
+    exact Nat.zero_le _
 
 /-- The ratio step rewritten via the boundary increments: cross-multiplied
 ratio growth is equivalent to a comparison of the two increments weighted by the
