@@ -173,6 +173,51 @@ lemma C_delta_PI (P : Params) (n k : ℕ) (hk : k ≤ n) :
   rw [B_swap P n k, B_swap P n (k + 1), C_delta_PC (swap P) n k hk, swap_pC,
     swap_pI, Bsum_swap]
 
+/-- The ratio step rewritten via the boundary increments: cross-multiplied
+ratio growth is equivalent to a comparison of the two increments weighted by the
+opposite probability. -/
+lemma C_ratio_step (P : Params) (n k : ℕ) :
+    PC P n (k + 1) * PI P n k > PC P n k * PI P n (k + 1) ↔
+      PC P n k * (PI P n k - PI P n (k + 1))
+        > PI P n k * (PC P n k - PC P n (k + 1)) := by
+  constructor <;> intro h <;> nlinarith [h]
+
+/-- Cross-multiplied ratio growth is, after cancelling the positive factor
+`C(n,k)`, exactly the "core" comparison `PC·pI^k·Bsum(pC) > PI·pC^k·Bsum(pI)`. -/
+lemma core_iff_ratio (P : Params) (n k : ℕ) (hk : k ≤ n) :
+    PC P n (k + 1) * PI P n k > PC P n k * PI P n (k + 1) ↔
+      PC P n k * P.pI ^ k * Bsum P n k P.pC
+        > PI P n k * P.pC ^ k * Bsum P n k P.pI := by
+  rw [C_ratio_step, C_delta_PI P n k hk, C_delta_PC P n k hk]
+  have hc : (0 : ℝ) < (n.choose k : ℝ) := by exact_mod_cast Nat.choose_pos hk
+  constructor <;> intro h <;> nlinarith [hc, h]
+
+/-! ## Symmetry of the core comparison under `swap`. -/
+
+/-- The two probabilities coincide when `pC = pI` (then `P` and `swap P` agree). -/
+lemma M_eq_swap_of_eq (P : Params) (n c i : ℕ) (h : P.pC = P.pI) :
+    M P n c i = M (swap P) n c i := by
+  unfold M; rw [swap_pC, swap_pI, swap_pR, h]
+
+lemma PC_eq_PI_of_pC_eq_pI (P : Params) (n k : ℕ) (h : P.pC = P.pI) :
+    PC P n k = PI P n k := by
+  rw [B_swap]; unfold PC
+  refine Finset.sum_congr rfl (fun c _ => Finset.sum_congr rfl (fun i _ => ?_))
+  rw [M_eq_swap_of_eq P n c i h]
+
+/-- Swapping the parameters exchanges the two sides of the core comparison:
+`LHS_core (swap P) = RHS_core P`. -/
+lemma core_L_swap (P : Params) (n k : ℕ) :
+    PC (swap P) n k * (swap P).pI ^ k * Bsum (swap P) n k (swap P).pC
+      = PI P n k * P.pC ^ k * Bsum P n k P.pI := by
+  rw [← B_swap, swap_pI, swap_pC, Bsum_swap]
+
+/-- `RHS_core (swap P) = LHS_core P`. -/
+lemma core_R_swap (P : Params) (n k : ℕ) :
+    PI (swap P) n k * (swap P).pC ^ k * Bsum (swap P) n k (swap P).pI
+      = PC P n k * P.pI ^ k * Bsum P n k P.pC := by
+  rw [B_swap (swap P) n k, swap_swap, swap_pC, swap_pI, Bsum_swap]
+
 /-! ## A_trust_iff_ratio — trust-monotonicity is ratio-monotonicity. -/
 
 /-- Abstract monotonicity: for positive `a b c d`, `a/(a+b) < c/(c+d)` iff the
@@ -192,5 +237,34 @@ lemma A_trust_iff_ratio (P : Params) (n k : ℕ) (hn : 1 ≤ n) (hk1 : k ≤ n)
   have h := trust_lt_iff (PC_pos P n k hn hk1) (PI_pos P n k hn hk1)
     (PC_pos P n (k + 1) hn hk2) (PI_pos P n (k + 1) hn hk2)
   rw [gt_iff_lt, h]
+
+/-! ## Assembly — `MainProp` modulo the single core inequality `C_core`. -/
+
+/-- **Reduction of the conjecture to one inequality.**  Granting `C_core` — that
+`pC > pI` forces the core comparison for every valid `(P, n, k)` — the full
+biconditional `MainProp` follows, via `A_trust_iff_ratio`, `C_ratio_step`,
+`C_delta`, and the `swap` symmetry (trichotomy on `pC` vs `pI`). -/
+lemma main_of_core
+    (Hcore : ∀ (P : Params) (n k : ℕ), 1 ≤ n → 1 ≤ k → k + 1 ≤ n → P.pC > P.pI →
+      PC P n k * P.pI ^ k * Bsum P n k P.pC
+        > PI P n k * P.pC ^ k * Bsum P n k P.pI) :
+    MainProp := by
+  intro P n k hn hk1 hk2
+  have h1n : 1 ≤ n := by omega
+  have hkn : k ≤ n := by omega
+  rw [A_trust_iff_ratio P n k h1n hkn hk2, core_iff_ratio P n k hkn]
+  constructor
+  · intro hcore
+    by_contra hle
+    rw [not_lt] at hle
+    rcases lt_or_eq_of_le hle with hlt | heq
+    · have hlt' : (swap P).pC > (swap P).pI := by rw [swap_pC, swap_pI]; exact hlt
+      have hsw := Hcore (swap P) n k h1n hk1 hk2 hlt'
+      rw [core_L_swap, core_R_swap] at hsw
+      linarith
+    · rw [PC_eq_PI_of_pC_eq_pI P n k heq, heq] at hcore
+      exact absurd hcore (lt_irrefl _)
+  · intro hgt
+    exact Hcore P n k h1n hk1 hk2 hgt
 
 end ConjectureProof

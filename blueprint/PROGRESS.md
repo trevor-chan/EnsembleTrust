@@ -58,14 +58,24 @@ Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
     `add_sub_cancel_right` to cancel the `PC(k+1)` tail, then factor
     `C(n,k)·pC^k` out via `Finset.mul_sum` + termwise `unfold M; ring`.
     `C_delta_PI`: from `C_delta_PC (swap P)` via `B_swap` + `Bsum_swap`.
-- [ ] **C_ratio_step** — `ρ(k+1) > ρ(k) ↔ PC(k)·(PI(k)−PI(k+1)) > PI(k)·(PC(k)−PC(k+1))`.
-  - depends on: A0_pos · status: TODO
-- [ ] **C_core** — pC > pI (with pR > 0) ⟹ the C_ratio_step inequality holds,
-    i.e. `pI^k Bsum(pC) · PC(k) > pC^k Bsum(pI) · PI(k)` for all valid k.
+- [x] **C_ratio_step** — `ρ(k+1) > ρ(k) ↔ PC(k)·(PI(k)−PI(k+1)) > PI(k)·(PC(k)−PC(k+1))`.
+  - depends on: A0_pos · status: **PROVED** (pure algebra; `constructor <;> nlinarith`).
+    Needed no positivity. Also `core_iff_ratio`: folds in `C_delta` and cancels
+    the positive `C(n,k)` so the ratio step becomes the **core comparison**
+    `PC(k)·pI^k·Bsum(pC) > PI(k)·pC^k·Bsum(pI)`.
+- [x] **B_branches** — subsumed by `main_of_core`. The trichotomy on `pC` vs
+    `pI` (with `swap` symmetry: `core_L_swap`, `core_R_swap`, and
+    `PC_eq_PI_of_pC_eq_pI` for the `pC=pI` case) handles all three directions.
+  - depends on: B_swap, C_core · status: **PROVED** (inside `main_of_core`).
+- [ ] **C_core** — pC > pI (with pR > 0) ⟹ the core comparison holds,
+    i.e. `PC(k)·pI^k·Bsum(pC) > PI(k)·pC^k·Bsum(pI)` for all valid k.
   - THE HARD PART. Likely induction on k and/or a log-concavity / ratio argument.
-  - depends on: C_delta, C_ratio_step · status: TODO
-- [ ] **main_theorem** — assemble A_trust_iff_ratio + B_branches + C_core into the iff.
-  - depends on: all of the above · status: TODO
+  - depends on: C_delta, C_ratio_step · status: **TODO — the sole remaining frontier.**
+    Stated exactly as the hypothesis `Hcore` of `main_of_core`.
+- [~] **main_theorem** — `main_of_core` reduces `MainProp` to `Hcore` (= C_core)
+    and is FULLY PROVEN. So `main_theorem := main_of_core C_core` the moment
+    C_core lands. Until then `Main.lean` keeps the single sanctioned `sorry`.
+  - depends on: C_core · status: assembled; waiting only on C_core.
 
 ## Session log
 
