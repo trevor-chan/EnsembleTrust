@@ -47,11 +47,17 @@ Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
 - [ ] **B_branches** — from B_swap: pC = pI ⟹ ρ constant (Trust ≡ ½);
     pC < pI ⟹ ρ strictly decreasing. Gives the two non-`<½` directions.
   - depends on: B_swap, C_core · status: TODO
-- [ ] **C_delta** — closed forms for the boundary increments:
+- [x] **C_delta** — closed forms for the boundary increments:
     `PC(k) − PC(k+1) = pC^k · C(n,k) · Bsum(pI)` and
     `PI(k) − PI(k+1) = pI^k · C(n,k) · Bsum(pC)`,
-    where `Bsum(x) = Σ_{j=0}^{min(k-1,n-k)} C(n-k,j) x^j pR^{(n-k)-j}`.
-  - depends on: (none) · status: TODO
+    where `Bsum(x) = Σ_{i=0}^{k-1} [k+i≤n] C(n-k,i) x^i pR^{(n-k)-i}`.
+  - depends on: (none) · status: **PROVED** (`C_delta_PC`, `C_delta_PI`).
+    `Bsum` is `def`'d with the indicator `[k+i≤n]` folded in (so the `range k`
+    cap and the `i ≤ n-k` cap are both present, matching `min(k-1,n-k)`).
+    `C_delta_PC`: peel `Icc k n = insert k (Icc (k+1) n)`, `sum_insert`,
+    `add_sub_cancel_right` to cancel the `PC(k+1)` tail, then factor
+    `C(n,k)·pC^k` out via `Finset.mul_sum` + termwise `unfold M; ring`.
+    `C_delta_PI`: from `C_delta_PC (swap P)` via `B_swap` + `Bsum_swap`.
 - [ ] **C_ratio_step** — `ρ(k+1) > ρ(k) ↔ PC(k)·(PI(k)−PI(k+1)) > PI(k)·(PC(k)−PC(k+1))`.
   - depends on: A0_pos · status: TODO
 - [ ] **C_core** — pC > pI (with pR > 0) ⟹ the C_ratio_step inequality holds,

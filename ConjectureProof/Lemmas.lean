@@ -36,6 +36,13 @@ lemma M_corner_I (P : Params) (n : ℕ) : M P n 0 n = P.pI ^ n := by
   unfold M
   simp
 
+/-- The "boundary sum" appearing in the threshold increment: the contribution
+of the agents *not* in the winning bloc, with `x` the per-agent weight of the
+losing-but-counted side.  Only `P.pR` is used from `P`. -/
+noncomputable def Bsum (P : Params) (n k : ℕ) (x : ℝ) : ℝ :=
+  ∑ i ∈ Finset.range k,
+    if k + i ≤ n then ((n - k).choose i : ℝ) * x ^ i * P.pR ^ (n - k - i) else 0
+
 /-! ## A0_pos — strict positivity of the two consensus probabilities. -/
 
 /-- `PC` is strictly positive: the all-correct outcome `c = n, i = 0` is always
@@ -134,6 +141,37 @@ lemma B_swap (P : Params) (n k : ℕ) : PI P n k = PC (swap P) n k := by
   apply Finset.sum_congr rfl
   intro b _
   rw [M_swap P n b a, Nat.add_comm b a]
+
+/-! ## C_delta — closed forms for the threshold increments. -/
+
+/-- `Bsum` only depends on `P` through `P.pR`, which `swap` fixes. -/
+lemma Bsum_swap (P : Params) (n k : ℕ) (x : ℝ) :
+    Bsum (swap P) n k x = Bsum P n k x := by
+  simp only [Bsum, swap_pR]
+
+/-- Raising the threshold removes exactly the `c = k` slice of the correct-
+consensus sum: `PC(k) − PC(k+1) = C(n,k)·pC^k·Bsum(pI)`. -/
+lemma C_delta_PC (P : Params) (n k : ℕ) (hk : k ≤ n) :
+    PC P n k - PC P n (k + 1)
+      = (n.choose k : ℝ) * P.pC ^ k * Bsum P n k P.pI := by
+  have hins : Finset.Icc k n = insert k (Finset.Icc (k + 1) n) := by
+    ext x; simp only [Finset.mem_Icc, Finset.mem_insert]; omega
+  have hnm : k ∉ Finset.Icc (k + 1) n := by simp [Finset.mem_Icc]
+  unfold PC
+  rw [hins, Finset.sum_insert hnm, add_sub_cancel_right, Bsum, Finset.mul_sum]
+  apply Finset.sum_congr rfl
+  intro i _
+  split_ifs with h
+  · unfold M; ring
+  · ring
+
+/-- The specious counterpart, by the `c ↔ i` symmetry:
+`PI(k) − PI(k+1) = C(n,k)·pI^k·Bsum(pC)`. -/
+lemma C_delta_PI (P : Params) (n k : ℕ) (hk : k ≤ n) :
+    PI P n k - PI P n (k + 1)
+      = (n.choose k : ℝ) * P.pI ^ k * Bsum P n k P.pC := by
+  rw [B_swap P n k, B_swap P n (k + 1), C_delta_PC (swap P) n k hk, swap_pC,
+    swap_pI, Bsum_swap]
 
 /-! ## A_trust_iff_ratio — trust-monotonicity is ratio-monotonicity. -/
 
