@@ -13,7 +13,8 @@ Memory across nightly runs. Read at the start of each session, update at the end
 Let `ρ(k) := PC(k) / PI(k)`. Because `Trust = 1/(1 + PI/PC)` is strictly
 increasing in `ρ`, trust-monotonicity is ratio-monotonicity. The `c ↔ i`
 symmetry of the index set reduces the `iff` to one implication; the real work is
-that single core inequality.
+the single core inequality `C_core`. A worked-out attack for `C_core` (paper
+reduction to one conditional-mean inequality) now lives in the C_core entry.
 
 ## Lemma tree
 
@@ -44,9 +45,6 @@ Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
     - `B_swap` itself: `Finset.sum_congr` term-by-term (index sets already match)
       + `M_swap` + `Nat.add_comm`.
     - Also have `swap_swap : swap (swap P) = P` (`rfl`) for the symmetry trick.
-- [ ] **B_branches** — from B_swap: pC = pI ⟹ ρ constant (Trust ≡ ½);
-    pC < pI ⟹ ρ strictly decreasing. Gives the two non-`<½` directions.
-  - depends on: B_swap, C_core · status: TODO
 - [x] **C_delta** — closed forms for the boundary increments:
     `PC(k) − PC(k+1) = pC^k · C(n,k) · Bsum(pI)` and
     `PI(k) − PI(k+1) = pI^k · C(n,k) · Bsum(pC)`,
@@ -69,9 +67,10 @@ Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
   - depends on: B_swap, C_core · status: **PROVED** (inside `main_of_core`).
 - [ ] **C_core** — pC > pI (with pR > 0) ⟹ the core comparison holds,
     i.e. `PC(k)·pI^k·Bsum(pC) > PI(k)·pC^k·Bsum(pI)` for all valid k.
-  - THE HARD PART. Likely induction on k and/or a log-concavity / ratio argument.
-  - depends on: C_delta, C_ratio_step · status: **TODO — the sole remaining frontier.**
-    Stated exactly as the hypothesis `Hcore` of `main_of_core`.
+  - THE HARD PART, but now reduced on paper to ONE conditional-mean inequality
+    (see "Strategy" below). depends on: C_delta, C_ratio_step ·
+    status: **TODO — the sole remaining frontier.** Stated exactly as the
+    hypothesis `Hcore` of `main_of_core`.
   - **Equivalent reformulations** (all proven equivalent by the chain above, use
     whichever is easiest to attack):
     1. `PC(k)·pI^k·Bsum(pC) > PI(k)·pC^k·Bsum(pI)`  (the `Hcore` form).
@@ -81,12 +80,49 @@ Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
        threshold bump better than incorrect).
     5. Peeling the `c=k`/`i=k` slice from (3) gives the self-similar
        `PC(k+1)·pI^k·Bsum(pC) > PI(k+1)·pC^k·Bsum(pI)`.
+  - **Strategy (recommended attack — paper reduction to one clean inequality):**
+    1. REINDEX onto a common set. With `T_k := {(c,i) : c > i, c ≥ k, c+i ≤ n}`,
+         `PC(k) = Σ_{(c,i)∈T_k} M(c,i)`,  `PI(k) = Σ_{(c,i)∈T_k} M(i,c)`
+       (PI via the `c↔i` relabel that `B_swap` already encodes — SAME set,
+       reflected weights). By `choose_swap` the multinomial coefficient is
+       swap-symmetric, so termwise
+         `M(c,i) / M(i,c) = (pC/pI)^(c−i) =: t^(c−i)`,  `t := pC/pI > 1` on `T_k`.
+    2. RATIO AS A WEIGHTED AVERAGE.
+         `ρ(k) = PC(k)/PI(k) = (Σ_{T_k} t^(c−i)·M(i,c)) / (Σ_{T_k} M(i,c))`
+              `= E_μ[ t^(c−i) ]`,  with measure `μ(c,i) ∝ M(i,c)` on `T_k`.
+       Every weight `t^(c−i) > 1` since `c > i` on `T_k`.
+    3. MEDIANT. `T_k = R_k ⊔ T_{k+1}` with `R_k = {(k,i) : i < k, k+i ≤ n}` the
+       `c=k` slice (`ΔPC = Σ_{R_k} M(c,i)`, `ΔPI = Σ_{R_k} M(i,c)`; these are the
+       C_delta closed forms). A mediant lies between its parents, so `ρ(k)` lies
+       between `ΔPC/ΔPI` and `ρ(k+1)`, hence
+         `ρ(k+1) > ρ(k)  ⟺  ρ(k+1) > ΔPC/ΔPI`
+                        `⟺  E_μ[t^(c−i) | T_{k+1}] > E_μ[t^(c−i) | R_k]`.
+       (Same as reformulation 3/4, read probabilistically:
+        `E[·|T_{k+1}] = PC(k+1)/PI(k+1)`,
+        `E[·|R_k] = ΔPC/ΔPI = t^k·Bsum(pI)/Bsum(pC)`.)
+       ⇒ SOLE REMAINING GOAL: average weight on what survives the bump beats the
+         average weight on the removed slice.
+    4. WHY pR > 0 IS NEEDED (matches `pR_pos` in Statement): `μ(R_k)` carries a
+       factor `pR^(n−k−i)`, so `μ(R_k) = 0` when `pR = 0` — nothing is removed,
+       the mediant degenerates, `ρ` is flat. Strictness genuinely uses `pR_pos`.
+  - **Attack avenues for the boxed inequality** (NOT pointwise: `T_{k+1}` holds
+    small-weight points like `(k+1,k)` with `w=t`, while `R_k` holds the large
+    `(k,0)` with `w=t^k`, so no termwise domination):
+    (a) DOUBLE SUM / Chebyshev–FKG (most Lean-tractable — finite, no limits):
+        `E[w|T_{k+1}] > E[w|R_k]  ⟺
+           Σ_{x∈T_{k+1}} Σ_{y∈R_k} (w(x) − w(y))·μ(x)·μ(y) > 0`.
+        Try to show positivity by pairing each `y∈R_k` with a dominating
+        `x∈T_{k+1}`.
+    (b) WEIGHTED INJECTION `φ : R_k ↪ T_{k+1}`. The shift `(k,i) ↦ (k+1,i)`
+        multiplies `w` by `t` but distorts `μ` by `(n−k−i)·pI / ((k+1)·pR)`;
+        needs that distortion controlled (or a better `φ`).
+    (c) INDUCTION ON k riding the mediant relation upward.
+    Recommend trying (a) on small `n` first to see whether the pairing is
+    termwise or needs (b). Do NOT commit a partial/blind `C_core` that breaks the
+    build — if no full line closes, log the sticking point and stop.
   - **Available tools for the attack:** `A0_pos` (PC,PI > 0), `Bsum_pos`
     (Bsum > 0, so both increments ΔPC,ΔPI > 0), `M_swap`/`B_swap` symmetry,
-    `choose_swap`, and the closed forms `C_delta_PC/PI`. The remaining content is
-    a genuine combinatorial inequality (a weighted injection from the PI index
-    set into the PC index set that strictly increases mass when pC>pI), not yet
-    formalized.
+    `choose_swap`, and the closed forms `C_delta_PC/PI`.
 - [~] **main_theorem** — `main_of_core` reduces `MainProp` to `Hcore` (= C_core)
     and is FULLY PROVEN. So `main_theorem := main_of_core C_core` the moment
     C_core lands. Until then `Main.lean` keeps the single sanctioned `sorry`.
@@ -95,6 +131,17 @@ Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
 ## Session log
 
 > Newest entry on top. One block per run.
+
+### 2026-06-22 — C_core strategy added (paper work, not a proving run)
+- Reduced C_core to a single conditional-mean inequality and recorded it in the
+  C_core entry under "Strategy" + "Attack avenues". Nothing proven in Lean this
+  pass; `Main.lean` still holds the single sanctioned `sorry`.
+- Core reduction: reindex both PC,PI over the common set `T_k`; then
+  `ρ(k) = E_μ[t^(c−i)]`; the mediant identity collapses monotonicity to
+  `E[t^(c−i)|T_{k+1}] > E[t^(c−i)|R_k]`. This also re-derives the `pR>0` need.
+- Frontier unchanged: C_core only. Preferred avenue (a), the finite double-sum
+  positivity `Σ_{T_{k+1}}Σ_{R_k}(w(x)−w(y))μ(x)μ(y) > 0`; verify the pairing on
+  small n by hand before formalizing.
 
 ### 2026-06-22 — first proving run
 - Env note: the Lean release host (`releases.lean-lang.org`) is blocked by the
