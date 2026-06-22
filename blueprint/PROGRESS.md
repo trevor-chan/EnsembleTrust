@@ -19,10 +19,14 @@ that single core inequality.
 
 Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
 
-- [ ] **A0_pos** — `0 < PC P n k` and `0 < PI P n k` for all `k ≤ n`.
+- [x] **A0_pos** — `0 < PC P n k` and `0 < PI P n k` for `1 ≤ n`, `k ≤ n`.
   - why: needed for the ratio and the denominator of Trust. The all-correct term
     `pC^n` (resp. `pI^n`) is always in range and positive.
-  - depends on: (none) · status: TODO
+  - depends on: (none) · status: **PROVED** (as `PC_pos`, `PI_pos`).
+    Helpers: `M_nonneg` (positivity), `M_corner_C`/`M_corner_I` (corner terms
+    `= pC^n` / `pI^n`, by `simp`). Proof: `Finset.sum_pos'` twice (outer over the
+    count, inner over the plurality index), exhibiting the corner `c=n,i=0`
+    (resp. `i=n,c=0`).
 - [ ] **A_trust_iff_ratio** — `Trust P n (k+1) > Trust P n k ↔ ρ(k+1) > ρ(k)`.
   - algebra over positives; cross-multiply with A0_pos.
   - depends on: A0_pos · status: TODO
