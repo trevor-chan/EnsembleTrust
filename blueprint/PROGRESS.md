@@ -72,6 +72,21 @@ Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
   - THE HARD PART. Likely induction on k and/or a log-concavity / ratio argument.
   - depends on: C_delta, C_ratio_step · status: **TODO — the sole remaining frontier.**
     Stated exactly as the hypothesis `Hcore` of `main_of_core`.
+  - **Equivalent reformulations** (all proven equivalent by the chain above, use
+    whichever is easiest to attack):
+    1. `PC(k)·pI^k·Bsum(pC) > PI(k)·pC^k·Bsum(pI)`  (the `Hcore` form).
+    2. `PC(k)·(PI(k)−PI(k+1)) > PI(k)·(PC(k)−PC(k+1))`  (`C_ratio_step`).
+    3. `PC(k+1)·PI(k) > PI(k+1)·PC(k)`  (cross-multiplied ratio growth).
+    4. `PC(k+1)/PC(k) > PI(k+1)/PI(k)`  (correct consensus "survives" the
+       threshold bump better than incorrect).
+    5. Peeling the `c=k`/`i=k` slice from (3) gives the self-similar
+       `PC(k+1)·pI^k·Bsum(pC) > PI(k+1)·pC^k·Bsum(pI)`.
+  - **Available tools for the attack:** `A0_pos` (PC,PI > 0), `Bsum_pos`
+    (Bsum > 0, so both increments ΔPC,ΔPI > 0), `M_swap`/`B_swap` symmetry,
+    `choose_swap`, and the closed forms `C_delta_PC/PI`. The remaining content is
+    a genuine combinatorial inequality (a weighted injection from the PI index
+    set into the PC index set that strictly increases mass when pC>pI), not yet
+    formalized.
 - [~] **main_theorem** — `main_of_core` reduces `MainProp` to `Hcore` (= C_core)
     and is FULLY PROVEN. So `main_theorem := main_of_core C_core` the moment
     C_core lands. Until then `Main.lean` keeps the single sanctioned `sorry`.
@@ -80,6 +95,27 @@ Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
 ## Session log
 
 > Newest entry on top. One block per run.
+
+### 2026-06-22 — first proving run
+- Env note: the Lean release host (`releases.lean-lang.org`) is blocked by the
+  network policy (403 `host_not_allowed`); installed `leanprover/lean4:v4.31.0`
+  from the GitHub releases mirror by hand (download + python `zstandard` extract
+  into `~/.elan/toolchains/`), then `lake exe cache get` worked. Build green.
+- **PROVED this run (all in `Lemmas.lean`, build + integrity green at each step):**
+  - `A0_pos` → `PC_pos`, `PI_pos` (+ helpers `M_nonneg`, `M_corner_C/I`).
+  - `A_trust_iff_ratio` (+ abstract `trust_lt_iff`, via `div_lt_div_iff₀`).
+  - `B_swap` (+ `choose_swap`, `swap`/`swap_swap`, `M_swap`).
+  - `C_delta` → `C_delta_PC`, `C_delta_PI` (+ `Bsum` def, `Bsum_swap`).
+  - `C_ratio_step` and `core_iff_ratio`.
+  - `main_of_core`: **fully proven reduction of `MainProp` to `C_core`**
+    (subsumes `B_branches` via trichotomy + `swap` symmetry; helpers
+    `M_eq_swap_of_eq`, `PC_eq_PI_of_pC_eq_pI`, `core_L_swap`, `core_R_swap`).
+  - `Bsum_pos` (down payment toward C_core: increments are strictly positive).
+- **Frontier for next run:** `C_core` only. The moment it lands,
+  `Main.lean` becomes `theorem main_theorem : MainProp := main_of_core C_core`
+  and the project is COMPLETE. See the C_core entry for 5 equivalent forms and
+  the available toolbox.
+- `Main.lean` still holds the single sanctioned `sorry`.
 
 ### (seed)
 - Statement frozen. Placeholder `main_theorem` open. Lemma tree above is the plan.

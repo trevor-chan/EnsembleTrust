@@ -149,6 +149,22 @@ lemma Bsum_swap (P : Params) (n k : ℕ) (x : ℝ) :
     Bsum (swap P) n k x = Bsum P n k x := by
   simp only [Bsum, swap_pR]
 
+/-- `Bsum` is strictly positive for a positive weight: the `i = 0` term is
+`pR^(n-k) > 0` and the rest are nonnegative. (Needs `1 ≤ k ≤ n`.) -/
+lemma Bsum_pos (P : Params) (n k : ℕ) (hk1 : 1 ≤ k) (hkn : k ≤ n) {x : ℝ}
+    (hx : 0 < x) : 0 < Bsum P n k x := by
+  have hpR := P.pR_pos
+  unfold Bsum
+  apply Finset.sum_pos'
+  · intro i _
+    split_ifs with h
+    · positivity
+    · exact le_refl 0
+  · refine ⟨0, Finset.mem_range.mpr hk1, ?_⟩
+    rw [if_pos (by omega)]
+    simp only [Nat.choose_zero_right, Nat.cast_one, pow_zero, one_mul, Nat.sub_zero]
+    positivity
+
 /-- Raising the threshold removes exactly the `c = k` slice of the correct-
 consensus sum: `PC(k) − PC(k+1) = C(n,k)·pC^k·Bsum(pI)`. -/
 lemma C_delta_PC (P : Params) (n k : ℕ) (hk : k ≤ n) :
