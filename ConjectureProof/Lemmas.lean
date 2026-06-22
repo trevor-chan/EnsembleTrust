@@ -166,6 +166,19 @@ lemma Bsum_pos (P : Params) (n k : ℕ) (hk1 : 1 ≤ k) (hkn : k ≤ n) {x : ℝ
     simp only [Nat.choose_zero_right, Nat.cast_one, pow_zero, one_mul, Nat.sub_zero]
     positivity
 
+/-- The `if k+i ≤ n` guard in `Bsum` is redundant: when `i > n-k` the binomial
+coefficient `C(n-k,i)` already vanishes.  Dropping it gives a plain `range`-sum,
+the convenient form for the double-sum manipulations behind `C_core`. -/
+lemma Bsum_eq (P : Params) (n k : ℕ) (hkn : k ≤ n) (x : ℝ) :
+    Bsum P n k x
+      = ∑ i ∈ Finset.range k, ((n - k).choose i : ℝ) * x ^ i * P.pR ^ (n - k - i) := by
+  unfold Bsum
+  apply Finset.sum_congr rfl
+  intro i _
+  split_ifs with h
+  · rfl
+  · rw [Nat.choose_eq_zero_of_lt (show n - k < i by omega), Nat.cast_zero]; ring
+
 /-- Raising the threshold removes exactly the `c = k` slice of the correct-
 consensus sum: `PC(k) − PC(k+1) = C(n,k)·pC^k·Bsum(pI)`. -/
 lemma C_delta_PC (P : Params) (n k : ℕ) (hk : k ≤ n) :
