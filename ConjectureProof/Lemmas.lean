@@ -17,6 +17,7 @@ import ConjectureProof.Statement
 namespace ConjectureProof
 
 open Finset
+open scoped Nat
 
 /-! ## Basic facts about the multinomial weight `M`. -/
 
@@ -92,7 +93,7 @@ lemma PI_pos (P : Params) (n k : ℕ) (hn : 1 ≤ n) (hk : k ≤ n) : 0 < PI P n
 /-! ## B_swap — the `c ↔ i` symmetry of the index set. -/
 
 /-- The multinomial coefficient is symmetric under exchanging the two counts:
-`C(n,c)·C(n-c,i) = C(n,i)·C(n-i,c)` (both equal `n! / (c! i! (n-c-i)!)`). -/
+`C(n,c)·C(n-c,i) = C(n,i)·C(n-i,c)` (both equal `n! / (c! i! (n-c-i) !)`). -/
 lemma choose_swap (n c i : ℕ) :
     n.choose c * (n - c).choose i = n.choose i * (n - i).choose c := by
   have h1 := Nat.choose_mul (n := n) (k := c + i) (s := c) (Nat.le_add_right c i)
@@ -165,6 +166,19 @@ lemma Bsum_pos (P : Params) (n k : ℕ) (hk1 : 1 ≤ k) (hkn : k ≤ n) {x : ℝ
     simp only [Nat.choose_zero_right, Nat.cast_one, pow_zero, one_mul, Nat.sub_zero]
     positivity
 
+/-- The `if k+i ≤ n` guard in `Bsum` is redundant: when `i > n-k` the binomial
+coefficient `C(n-k,i)` already vanishes.  Dropping it gives a plain `range`-sum,
+the convenient form for the double-sum manipulations behind `C_core`. -/
+lemma Bsum_eq (P : Params) (n k : ℕ) (hkn : k ≤ n) (x : ℝ) :
+    Bsum P n k x
+      = ∑ i ∈ Finset.range k, ((n - k).choose i : ℝ) * x ^ i * P.pR ^ (n - k - i) := by
+  unfold Bsum
+  apply Finset.sum_congr rfl
+  intro i _
+  split_ifs with h
+  · rfl
+  · rw [Nat.choose_eq_zero_of_lt (show n - k < i by omega), Nat.cast_zero]; ring
+
 /-- Raising the threshold removes exactly the `c = k` slice of the correct-
 consensus sum: `PC(k) − PC(k+1) = C(n,k)·pC^k·Bsum(pI)`. -/
 lemma C_delta_PC (P : Params) (n k : ℕ) (hk : k ≤ n) :
@@ -188,6 +202,132 @@ lemma C_delta_PI (P : Params) (n k : ℕ) (hk : k ≤ n) :
       = (n.choose k : ℝ) * P.pI ^ k * Bsum P n k P.pC := by
   rw [B_swap P n k, B_swap P n (k + 1), C_delta_PC (swap P) n k hk, swap_pC,
     swap_pI, Bsum_swap]
+
+/-! ## Slice decomposition — `PC`/`PI` as sums of per-`c` slices.
+
+Each fixed correct-count `c ≥ k` contributes `C(n,c)·pC^c·Bsum(n,c,pI)` to `PC`
+(`Bsum P n c x` is the boundary generator `S_c(x)` for that slice).  This rewrites
+the consensus probabilities as single sums over the winning count, the form used
+to attack `C_core` slice-by-slice. -/
+
+/-- The inner `c`-slice of the correct-consensus sum factors as
+`C(n,c)·pC^c·Bsum(n,c,pI)`. -/
+lemma PC_inner (P : Params) (n c : ℕ) :
+    (∑ i ∈ Finset.range c, if c + i ≤ n then M P n c i else 0)
+      = (n.choose c : ℝ) * P.pC ^ c * Bsum P n c P.pI := by
+  rw [Bsum, Finset.mul_sum]
+  apply Finset.sum_congr rfl
+  intro i _
+  split_ifs with h
+  · unfold M; ring
+  · ring
+
+/-- `PC` as a sum of per-`c` slices. -/
+lemma PC_slice (P : Params) (n k : ℕ) :
+    PC P n k
+      = ∑ c ∈ Finset.Icc k n, (n.choose c : ℝ) * P.pC ^ c * Bsum P n c P.pI := by
+  unfold PC
+  exact Finset.sum_congr rfl (fun c _ => PC_inner P n c)
+
+/-- `PI` as a sum of per-`c` slices, via the `c ↔ i` symmetry. -/
+lemma PI_slice (P : Params) (n k : ℕ) :
+    PI P n k
+      = ∑ c ∈ Finset.Icc k n, (n.choose c : ℝ) * P.pI ^ c * Bsum P n c P.pC := by
+  rw [B_swap, PC_slice]
+  refine Finset.sum_congr rfl (fun c _ => ?_)
+  rw [swap_pC, swap_pI, Bsum_swap]
+
+/-! ## Binomial-coefficient inequality — the combinatorial core of a slice.
+
+`bracket_c`'s double-sum kernel is antisymmetric under `(a,b) ↦ (b+u, a−u)`, so its
+positivity reduces to a weight comparison that is, after clearing the `pR` factors,
+the pure inequality `binom_key`.  No probabilities appear here. -/
+
+/-- A factorial monotonicity template: for `p ≤ q`,
+`(p+t) !·q! ≤ (q+t) !·p!`.  (Equivalent to `C(p+t,t) ≤ C(q+t,t)`.) -/
+lemma fact_template (p q t : ℕ) (h : p ≤ q) :
+    (p + t) ! * q ! ≤ (q + t) ! * p ! := by
+  have hp : (p + t).choose t * t ! * p ! = (p + t) ! := by
+    have := Nat.choose_mul_factorial_mul_factorial (show t ≤ p + t by omega)
+    rwa [Nat.add_sub_cancel] at this
+  have hq : (q + t).choose t * t ! * q ! = (q + t) ! := by
+    have := Nat.choose_mul_factorial_mul_factorial (show t ≤ q + t by omega)
+    rwa [Nat.add_sub_cancel] at this
+  have hc : (p + t).choose t ≤ (q + t).choose t := Nat.choose_le_choose t (by omega)
+  calc (p + t) ! * q !
+      = ((p + t).choose t * t ! * p !) * q ! := by rw [hp]
+    _ = ((p + t).choose t * t ! * q !) * p ! := by ring
+    _ ≤ ((q + t).choose t * t ! * q !) * p ! := by gcongr
+    _ = (q + t) ! * p ! := by rw [hq]
+
+/-- **The combinatorial core.**  For `s < b` (any `N, u`):
+`C(N,b+u)·C(N+u,s) ≤ C(N,u+s)·C(N+u,b)`.
+Both sides equal `N!·(N+u) !` divided by a product of four factorials; the claim is
+that the left multiplier dominates the right, which `fact_template` supplies. -/
+lemma binom_key (N u s b : ℕ) (hsb : s < b) :
+    N.choose (b + u) * (N + u).choose s ≤ N.choose (u + s) * (N + u).choose b := by
+  by_cases hbu : b + u ≤ N
+  · -- the generic case: clear to factorials and compare the multipliers
+    have hus : u + s ≤ N := by omega
+    have hb : b ≤ N + u := by omega
+    have hs : s ≤ N + u := by omega
+    set L := N.choose (b + u) * (N + u).choose s with hL_def
+    set R := N.choose (u + s) * (N + u).choose b with hR_def
+    set Da := (u + s) ! * (N - (u + s)) ! * (b ! * (N + u - b) !) with hDa_def
+    set Db := (b + u) ! * (N - (b + u)) ! * (s ! * (N + u - s) !) with hDb_def
+    have e1 : N.choose (u + s) * (u + s) ! * (N - (u + s)) ! = N ! :=
+      Nat.choose_mul_factorial_mul_factorial hus
+    have e2 : (N + u).choose b * b ! * (N + u - b) ! = (N + u) ! :=
+      Nat.choose_mul_factorial_mul_factorial hb
+    have e3 : N.choose (b + u) * (b + u) ! * (N - (b + u)) ! = N ! :=
+      Nat.choose_mul_factorial_mul_factorial hbu
+    have e4 : (N + u).choose s * s ! * (N + u - s) ! = (N + u) ! :=
+      Nat.choose_mul_factorial_mul_factorial hs
+    -- both `L·Db` and `R·Da` reorganise to `N!·(N+u) !`
+    have hLDb : L * Db = N ! * (N + u) ! := by
+      have : L * Db
+          = (N.choose (b + u) * (b + u) ! * (N - (b + u)) !)
+            * ((N + u).choose s * s ! * (N + u - s) !) := by
+        rw [hL_def, hDb_def]; ring
+      rw [this, e3, e4]
+    have hRDa : R * Da = N ! * (N + u) ! := by
+      have : R * Da
+          = (N.choose (u + s) * (u + s) ! * (N - (u + s)) !)
+            * ((N + u).choose b * b ! * (N + u - b) !) := by
+        rw [hR_def, hDa_def]; ring
+      rw [this, e1, e2]
+    have E : L * Db = R * Da := hLDb.trans hRDa.symm
+    -- the multiplier comparison `Da ≤ Db`, from two `fact_template`s
+    have i1 : (u + s) ! * b ! ≤ (b + u) ! * s ! := by
+      have h := fact_template s b u (le_of_lt hsb)
+      rwa [Nat.add_comm s u] at h
+    have i2 : (N - (u + s)) ! * (N + u - b) ! ≤ (N - (b + u)) ! * (N + u - s) ! := by
+      have h := fact_template (N - (b + u)) (N - (u + s)) (2 * u) (by omega)
+      have ea : N - (b + u) + 2 * u = N + u - b := by omega
+      have eb : N - (u + s) + 2 * u = N + u - s := by omega
+      rw [ea, eb] at h
+      calc (N - (u + s)) ! * (N + u - b) !
+          = (N + u - b) ! * (N - (u + s)) ! := by ring
+        _ ≤ (N + u - s) ! * (N - (b + u)) ! := h
+        _ = (N - (b + u)) ! * (N + u - s) ! := by ring
+    have hDa_le_Db : Da ≤ Db := by
+      calc Da = ((u + s) ! * b !) * ((N - (u + s)) ! * (N + u - b) !) := by
+                rw [hDa_def]; ring
+        _ ≤ ((b + u) ! * s !) * ((N - (b + u)) ! * (N + u - s) !) := Nat.mul_le_mul i1 i2
+        _ = Db := by rw [hDb_def]; ring
+    have hDa_pos : 0 < Da := by
+      rw [hDa_def]
+      exact Nat.mul_pos (Nat.mul_pos (Nat.factorial_pos _) (Nat.factorial_pos _))
+        (Nat.mul_pos (Nat.factorial_pos _) (Nat.factorial_pos _))
+    -- conclude by cancelling the positive `Da`
+    have hfin : L * Da ≤ R * Da :=
+      calc L * Da ≤ L * Db := Nat.mul_le_mul (le_refl L) hDa_le_Db
+        _ = R * Da := E
+    exact Nat.le_of_mul_le_mul_right hfin hDa_pos
+  · -- degenerate: `C(N,b+u) = 0`, so the left side vanishes
+    have hz : N.choose (b + u) = 0 := Nat.choose_eq_zero_of_lt (by omega)
+    rw [hz, Nat.zero_mul]
+    exact Nat.zero_le _
 
 /-- The ratio step rewritten via the boundary increments: cross-multiplied
 ratio growth is equivalent to a comparison of the two increments weighted by the
@@ -253,6 +393,288 @@ lemma A_trust_iff_ratio (P : Params) (n k : ℕ) (hn : 1 ≤ n) (hk1 : k ≤ n)
   have h := trust_lt_iff (PC_pos P n k hn hk1) (PI_pos P n k hn hk1)
     (PC_pos P n (k + 1) hn hk2) (PI_pos P n (k + 1) hn hk2)
   rw [gt_iff_lt, h]
+
+
+/-! ## bracket_pos — strict positivity of each slice bracket (the crux of C_core).
+
+Using the slice decomposition, `C_core` reduces to showing each per-`c` bracket
+`pC^(c-k)·Bsum(n,c,pI)·Bsum(n,k,pC) − pI^(c-k)·Bsum(n,c,pC)·Bsum(n,k,pI)` is positive.
+This is a correlation/FKG-type inequality: its double-sum kernel is antisymmetric
+under `(a,b) ↦ (b+u, a−u)` (`u=c−k`), and the weight monotonicity that makes the
+paired terms nonnegative is exactly `binom_key`. -/
+lemma bracket_pos (P : Params) (n k c : ℕ) (hk1 : 1 ≤ k) (hkc : k < c) (hcn : c ≤ n)
+    (hlt : P.pI < P.pC) :
+    P.pI ^ (c - k) * Bsum P n c P.pC * Bsum P n k P.pI
+      < P.pC ^ (c - k) * Bsum P n c P.pI * Bsum P n k P.pC := by
+  have hkn : k ≤ n := by omega
+  have hpC := P.pC_pos
+  have hpI := P.pI_pos
+  have hpR := P.pR_pos
+  set u := c - k with hu
+  -- weight and kernel of the (a,b) double sum
+  set W : ℕ → ℕ → ℝ := fun a b =>
+    ((n - c).choose a : ℝ) * ((n - k).choose b : ℝ) * P.pR ^ (n - c - a) * P.pR ^ (n - k - b)
+    with hW
+  set Kr : ℕ → ℕ → ℝ := fun a b =>
+    P.pC ^ (u + b) * P.pI ^ a - P.pI ^ (u + b) * P.pC ^ a with hKr
+  -- a helper to expand `e * (∑ F) * (∑ G)` into a double sum
+  have expand : ∀ (e : ℝ) (F G : ℕ → ℝ),
+      e * (∑ a ∈ range c, F a) * (∑ b ∈ range k, G b)
+        = ∑ a ∈ range c, ∑ b ∈ range k, e * F a * G b := by
+    intro e F G
+    rw [mul_assoc, Finset.sum_mul_sum, Finset.mul_sum]
+    refine Finset.sum_congr rfl (fun a _ => ?_)
+    rw [Finset.mul_sum]
+    exact Finset.sum_congr rfl (fun b _ => by ring)
+  -- the core identity: RHS - LHS = double sum of W*Kr
+  have key : P.pC ^ u * Bsum P n c P.pI * Bsum P n k P.pC
+      - P.pI ^ u * Bsum P n c P.pC * Bsum P n k P.pI
+      = ∑ a ∈ range c, ∑ b ∈ range k, W a b * Kr a b := by
+    rw [Bsum_eq P n c hcn, Bsum_eq P n c hcn, Bsum_eq P n k hkn, Bsum_eq P n k hkn]
+    rw [expand (P.pC ^ u)
+          (fun a => ((n - c).choose a : ℝ) * P.pI ^ a * P.pR ^ (n - c - a))
+          (fun b => ((n - k).choose b : ℝ) * P.pC ^ b * P.pR ^ (n - k - b)),
+        expand (P.pI ^ u)
+          (fun a => ((n - c).choose a : ℝ) * P.pC ^ a * P.pR ^ (n - c - a))
+          (fun b => ((n - k).choose b : ℝ) * P.pI ^ b * P.pR ^ (n - k - b))]
+    rw [← Finset.sum_sub_distrib]
+    refine Finset.sum_congr rfl (fun a _ => ?_)
+    rw [← Finset.sum_sub_distrib]
+    refine Finset.sum_congr rfl (fun b _ => ?_)
+    simp only [hW, hKr]
+    ring
+  -- reduce the goal to positivity of the double sum
+  rw [← sub_pos]
+  have hgoal : P.pC ^ (c - k) * Bsum P n c P.pI * Bsum P n k P.pC
+      - P.pI ^ (c - k) * Bsum P n c P.pC * Bsum P n k P.pI
+      = ∑ a ∈ range c, ∑ b ∈ range k, W a b * Kr a b := by
+    rw [← hu]; exact key
+  rw [hgoal]
+  -- nonnegativity of the weight
+  have hWnn : ∀ a b, 0 ≤ W a b := by
+    intro a b; rw [hW]; positivity
+  -- strict kernel positivity when the exponent of the larger probability dominates
+  have kernel_pos : ∀ (m a : ℕ), a < m → P.pI ^ m * P.pC ^ a < P.pC ^ m * P.pI ^ a := by
+    intro m a ham
+    have hpow : P.pI ^ (m - a) < P.pC ^ (m - a) :=
+      pow_lt_pow_left₀ hlt (le_of_lt hpI) (by omega)
+    have h1 : P.pI ^ m = P.pI ^ (m - a) * P.pI ^ a := by rw [← pow_add]; congr 1; omega
+    have h2 : P.pC ^ m = P.pC ^ (m - a) * P.pC ^ a := by rw [← pow_add]; congr 1; omega
+    calc P.pI ^ m * P.pC ^ a = P.pI ^ (m - a) * (P.pI ^ a * P.pC ^ a) := by rw [h1]; ring
+      _ < P.pC ^ (m - a) * (P.pI ^ a * P.pC ^ a) := by
+            apply mul_lt_mul_of_pos_right hpow; positivity
+      _ = P.pC ^ m * P.pI ^ a := by rw [h2]; ring
+  -- the kernel is positive on the relevant region
+  have hKr_pos : ∀ a b, a < u + b → 0 < Kr a b := by
+    intro a b hab
+    rw [hKr]
+    have := kernel_pos (u + b) a hab
+    linarith
+  -- weight monotonicity, the heart of the pairing, supplied by `binom_key`
+  have Wmono : ∀ a b, u ≤ a → a < c → b < k → a < u + b →
+      W (b + u) (a - u) ≤ W a b := by
+    intro a b hua hac hbk hab
+    have hnk : n - k = (n - c) + u := by omega
+    have hnat : (n - c).choose (b + u) * (n - k).choose (a - u)
+        ≤ (n - c).choose a * (n - k).choose b := by
+      have hkey := binom_key (n - c) u (a - u) b (by omega)
+      rw [show u + (a - u) = a by omega] at hkey
+      rw [hnk]; exact hkey
+    by_cases hzero : (n - c).choose (b + u) * (n - k).choose (a - u) = 0
+    · have hz : W (b + u) (a - u) = 0 := by
+        have hz2 : ((n - c).choose (b + u) : ℝ) * ((n - k).choose (a - u) : ℝ) = 0 := by
+          rw [← Nat.cast_mul, hzero, Nat.cast_zero]
+        simp only [hW]
+        linear_combination
+          (P.pR ^ (n - c - (b + u)) * P.pR ^ (n - k - (a - u))) * hz2
+      rw [hz]; exact hWnn a b
+    · -- all four coefficients in range, so the `pR` powers match
+      have hbu : b + u ≤ n - c := by
+        by_contra h
+        apply hzero
+        rw [show (n - c).choose (b + u) = 0 from Nat.choose_eq_zero_of_lt (by omega),
+          Nat.zero_mul]
+      have hau : a - u ≤ n - k := by
+        by_contra h
+        apply hzero
+        rw [show (n - k).choose (a - u) = 0 from Nat.choose_eq_zero_of_lt (by omega),
+          Nat.mul_zero]
+      have han : a ≤ n - c := by
+        by_contra h
+        apply hzero
+        have h0 : (n - c).choose a * (n - k).choose b = 0 := by
+          rw [show (n - c).choose a = 0 from Nat.choose_eq_zero_of_lt (by omega), Nat.zero_mul]
+        omega
+      have hbn : b ≤ n - k := by
+        by_contra h
+        apply hzero
+        have h0 : (n - c).choose a * (n - k).choose b = 0 := by
+          rw [show (n - k).choose b = 0 from Nat.choose_eq_zero_of_lt (by omega), Nat.mul_zero]
+        omega
+      have hExp : (n - c - (b + u)) + (n - k - (a - u)) = (n - c - a) + (n - k - b) := by omega
+      have hReq : P.pR ^ (n - c - (b + u)) * P.pR ^ (n - k - (a - u))
+          = P.pR ^ (n - c - a) * P.pR ^ (n - k - b) := by
+        rw [← pow_add, ← pow_add, hExp]
+      have hcast : ((n - c).choose (b + u) : ℝ) * ((n - k).choose (a - u) : ℝ)
+          ≤ ((n - c).choose a : ℝ) * ((n - k).choose b : ℝ) := by exact_mod_cast hnat
+      simp only [hW]
+      calc ((n - c).choose (b + u) : ℝ) * ((n - k).choose (a - u) : ℝ)
+              * P.pR ^ (n - c - (b + u)) * P.pR ^ (n - k - (a - u))
+          = (((n - c).choose (b + u) : ℝ) * ((n - k).choose (a - u) : ℝ))
+              * (P.pR ^ (n - c - (b + u)) * P.pR ^ (n - k - (a - u))) := by ring
+        _ = (((n - c).choose (b + u) : ℝ) * ((n - k).choose (a - u) : ℝ))
+              * (P.pR ^ (n - c - a) * P.pR ^ (n - k - b)) := by rw [hReq]
+        _ ≤ (((n - c).choose a : ℝ) * ((n - k).choose b : ℝ))
+              * (P.pR ^ (n - c - a) * P.pR ^ (n - k - b)) := by
+            apply mul_le_mul_of_nonneg_right hcast; positivity
+        _ = ((n - c).choose a : ℝ) * ((n - k).choose b : ℝ)
+              * P.pR ^ (n - c - a) * P.pR ^ (n - k - b) := by ring
+  -- the kernel is anti-symmetric under the pairing `(a,b) ↦ (b+u, a-u)`
+  have hKr_neg : ∀ a b, u ≤ a → Kr (b + u) (a - u) = - Kr a b := by
+    intro a b hua
+    simp only [hKr]
+    rw [show u + (a - u) = a by omega]; ring
+  set F : ℕ → ℝ := fun a => ∑ b ∈ range k, W a b * Kr a b with hF
+  -- split the outer range at `u`
+  have hsplit : (∑ a ∈ range c, F a)
+      = (∑ a ∈ range u, F a) + ∑ a ∈ Ico u c, F a := by
+    rw [range_eq_Ico, range_eq_Ico]
+    exact (Finset.sum_Ico_consecutive F (Nat.zero_le u) (by omega)).symm
+  rw [show (∑ a ∈ range c, ∑ b ∈ range k, W a b * Kr a b) = ∑ a ∈ range c, F a from rfl, hsplit]
+  -- the `a < u` block is strictly positive
+  have hExtra : 0 < ∑ a ∈ range u, F a := by
+    apply Finset.sum_pos'
+    · intro a ha
+      rw [Finset.mem_range] at ha
+      rw [hF]
+      apply Finset.sum_nonneg
+      intro b hb
+      rw [Finset.mem_range] at hb
+      exact mul_nonneg (hWnn a b) (le_of_lt (hKr_pos a b (by omega)))
+    · refine ⟨0, Finset.mem_range.mpr (by omega), ?_⟩
+      rw [hF]
+      apply Finset.sum_pos'
+      · intro b hb
+        rw [Finset.mem_range] at hb
+        exact mul_nonneg (hWnn 0 b) (le_of_lt (hKr_pos 0 b (by omega)))
+      · refine ⟨0, Finset.mem_range.mpr (by omega), ?_⟩
+        have hWpos : 0 < W 0 0 := by
+          rw [hW]; simp only [Nat.choose_zero_right, Nat.cast_one, one_mul]; positivity
+        exact mul_pos hWpos (hKr_pos 0 0 (by omega))
+  -- the `a ≥ u` block is nonnegative, by the involution doubling
+  have hPair : 0 ≤ ∑ a ∈ Ico u c, F a := by
+    simp only [hF]
+    rw [← Finset.sum_product']
+    set prod := (Ico u c) ×ˢ (range k) with hprod
+    set σ : ℕ × ℕ → ℕ × ℕ := fun p => (p.2 + u, p.1 - u) with hσ
+    have hmem : ∀ p ∈ prod, σ p ∈ prod := by
+      intro p hp
+      simp only [hprod, Finset.mem_product, Finset.mem_Ico, Finset.mem_range, hσ] at hp ⊢
+      omega
+    have hinv : ∀ p ∈ prod, σ (σ p) = p := by
+      intro p hp
+      simp only [hprod, Finset.mem_product, Finset.mem_Ico, Finset.mem_range] at hp
+      simp only [hσ, Prod.ext_iff]
+      omega
+    -- reindex by σ
+    have hreindex : (∑ p ∈ prod, W p.1 p.2 * Kr p.1 p.2)
+        = ∑ p ∈ prod, W (σ p).1 (σ p).2 * Kr (σ p).1 (σ p).2 := by
+      refine Finset.sum_nbij' σ σ hmem hmem hinv hinv ?_
+      intro p hp
+      rw [hinv p hp]
+    -- f(σp) = - W(σp) * Kr(p)
+    have hB : (∑ p ∈ prod, W (σ p).1 (σ p).2 * Kr (σ p).1 (σ p).2)
+        = - ∑ p ∈ prod, W (σ p).1 (σ p).2 * Kr p.1 p.2 := by
+      rw [← Finset.sum_neg_distrib]
+      apply Finset.sum_congr rfl
+      intro p hp
+      rw [hprod, Finset.mem_product, Finset.mem_Ico, Finset.mem_range] at hp
+      have : Kr (σ p).1 (σ p).2 = - Kr p.1 p.2 := by
+        rw [hσ]; exact hKr_neg p.1 p.2 (by omega)
+      rw [this]; ring
+    -- 2A = ∑ (W p - W σp) Kr p
+    have hdouble : 2 * (∑ p ∈ prod, W p.1 p.2 * Kr p.1 p.2)
+        = ∑ p ∈ prod, (W p.1 p.2 - W (σ p).1 (σ p).2) * Kr p.1 p.2 := by
+      have hAeq : (∑ p ∈ prod, W p.1 p.2 * Kr p.1 p.2)
+          = - ∑ p ∈ prod, W (σ p).1 (σ p).2 * Kr p.1 p.2 := hreindex.trans hB
+      have hexp : ∑ p ∈ prod, (W p.1 p.2 - W (σ p).1 (σ p).2) * Kr p.1 p.2
+          = (∑ p ∈ prod, W p.1 p.2 * Kr p.1 p.2)
+            - ∑ p ∈ prod, W (σ p).1 (σ p).2 * Kr p.1 p.2 := by
+        rw [← Finset.sum_sub_distrib]
+        apply Finset.sum_congr rfl
+        intro p _; ring
+      rw [hexp]; linarith [hAeq]
+    -- each term is nonnegative
+    have hterm : ∀ p ∈ prod, 0 ≤ (W p.1 p.2 - W (σ p).1 (σ p).2) * Kr p.1 p.2 := by
+      intro p hp
+      rw [hprod, Finset.mem_product, Finset.mem_Ico, Finset.mem_range] at hp
+      obtain ⟨⟨h1, h2⟩, h3⟩ := hp
+      rcases lt_trichotomy p.1 (u + p.2) with hlt' | heq' | hgt'
+      · -- Kr > 0, W p ≥ W σp
+        have hKpos : 0 < Kr p.1 p.2 := hKr_pos p.1 p.2 hlt'
+        have hWle : W (σ p).1 (σ p).2 ≤ W p.1 p.2 := by
+          rw [hσ]; exact Wmono p.1 p.2 h1 h2 h3 hlt'
+        nlinarith [hKpos, hWle]
+      · -- Kr = 0
+        have hz : Kr p.1 p.2 = 0 := by rw [hKr, heq']; ring
+        simp [hz]
+      · -- Kr < 0, W p ≤ W σp
+        have hKneg : Kr p.1 p.2 < 0 := by
+          rw [hKr]
+          have := kernel_pos p.1 (u + p.2) (by omega)
+          nlinarith [this]
+        have hWle : W p.1 p.2 ≤ W (σ p).1 (σ p).2 := by
+          rw [hσ]
+          have hh := Wmono (p.2 + u) (p.1 - u) (by omega) (by omega) (by omega) (by omega)
+          rw [show (p.1 - u) + u = p.1 by omega, show (p.2 + u) - u = p.2 by omega] at hh
+          exact hh
+        nlinarith [hKneg, hWle]
+    have hsum_nn : 0 ≤ ∑ p ∈ prod, (W p.1 p.2 - W (σ p).1 (σ p).2) * Kr p.1 p.2 :=
+      Finset.sum_nonneg hterm
+    linarith [hdouble, hsum_nn]
+  linarith
+
+/-! ## C_core — the core comparison, assembled from the slices. -/
+
+/-- **C_core.**  For `pC > pI`, the core comparison
+`PC(k)·pI^k·Bsum(pC) > PI(k)·pC^k·Bsum(pI)` holds.  Via the slice decomposition the
+difference factors as `pC^k·pI^k · Σ_{c≥k} C(n,c)·bracket_c`; the `c=k` term vanishes
+and every `c>k` term is strictly positive by `bracket_pos`, with `c=k+1` present. -/
+lemma C_core (P : Params) (n k : ℕ) (hn : 1 ≤ n) (hk1 : 1 ≤ k) (hk2 : k + 1 ≤ n)
+    (hpc : P.pC > P.pI) :
+    PC P n k * P.pI ^ k * Bsum P n k P.pC
+      > PI P n k * P.pC ^ k * Bsum P n k P.pI := by
+  rw [gt_iff_lt, ← sub_pos]
+  have hid : PC P n k * P.pI ^ k * Bsum P n k P.pC
+      - PI P n k * P.pC ^ k * Bsum P n k P.pI
+      = P.pC ^ k * P.pI ^ k * ∑ c ∈ Finset.Icc k n, (n.choose c : ℝ) *
+          (P.pC ^ (c - k) * Bsum P n c P.pI * Bsum P n k P.pC
+           - P.pI ^ (c - k) * Bsum P n c P.pC * Bsum P n k P.pI) := by
+    rw [PC_slice, PI_slice]
+    simp only [Finset.sum_mul, Finset.mul_sum, ← Finset.sum_sub_distrib]
+    apply Finset.sum_congr rfl
+    intro c hc
+    rw [Finset.mem_Icc] at hc
+    have epc : P.pC ^ c = P.pC ^ k * P.pC ^ (c - k) := by rw [← pow_add]; congr 1; omega
+    have epi : P.pI ^ c = P.pI ^ k * P.pI ^ (c - k) := by rw [← pow_add]; congr 1; omega
+    rw [epc, epi]; ring
+  rw [hid]
+  apply mul_pos (mul_pos (pow_pos P.pC_pos k) (pow_pos P.pI_pos k))
+  have hpeel : Finset.Icc k n = insert k (Finset.Icc (k + 1) n) := by
+    ext x; simp only [Finset.mem_insert, Finset.mem_Icc]; omega
+  rw [hpeel, Finset.sum_insert (by simp only [Finset.mem_Icc]; omega)]
+  rw [show (n.choose k : ℝ) *
+      (P.pC ^ (k - k) * Bsum P n k P.pI * Bsum P n k P.pC
+       - P.pI ^ (k - k) * Bsum P n k P.pC * Bsum P n k P.pI) = 0 from by
+        simp only [Nat.sub_self, pow_zero, one_mul]; ring, zero_add]
+  apply Finset.sum_pos
+  · intro c hc
+    rw [Finset.mem_Icc] at hc
+    apply mul_pos
+    · exact_mod_cast Nat.choose_pos (show c ≤ n by omega)
+    · have hb := bracket_pos P n k c hk1 (by omega) hc.2 hpc
+      linarith
+  · exact ⟨k + 1, Finset.mem_Icc.mpr ⟨le_refl _, hk2⟩⟩
 
 /-! ## Assembly — `MainProp` modulo the single core inequality `C_core`. -/
 

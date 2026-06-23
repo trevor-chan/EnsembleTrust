@@ -65,12 +65,25 @@ Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
     `pI` (with `swap` symmetry: `core_L_swap`, `core_R_swap`, and
     `PC_eq_PI_of_pC_eq_pI` for the `pC=pI` case) handles all three directions.
   - depends on: B_swap, C_core · status: **PROVED** (inside `main_of_core`).
-- [ ] **C_core** — pC > pI (with pR > 0) ⟹ the core comparison holds,
+- [x] **C_core** — pC > pI (with pR > 0) ⟹ the core comparison holds,
     i.e. `PC(k)·pI^k·Bsum(pC) > PI(k)·pC^k·Bsum(pI)` for all valid k.
-  - THE HARD PART, but now reduced on paper to ONE conditional-mean inequality
-    (see "Strategy" below). depends on: C_delta, C_ratio_step ·
-    status: **TODO — the sole remaining frontier.** Stated exactly as the
-    hypothesis `Hcore` of `main_of_core`.
+  - **PROVED** (2026-06-23). depends on: C_delta, C_ratio_step, slice
+    decomposition, `bracket_pos`, `binom_key`. The proof line that worked:
+    1. `PC_slice`/`PI_slice`: rewrite `PC(k)=Σ_{c≥k}C(n,c)pC^c·Bsum(n,c,pI)`
+       (and swapped for `PI`).
+    2. `C_core`: the core difference factors as
+       `pC^k·pI^k·Σ_{c∈[k,n]} C(n,c)·bracket_c`; the `c=k` term is 0, every
+       `c>k` term is strictly positive, and `c=k+1` is present ⇒ sum > 0.
+    3. `bracket_pos` (the crux): each `bracket_c > 0` for `k<c≤n`. Expand as a
+       double sum over `(a,b)∈range c × range k`; the kernel
+       `pC^(u+b)pI^a − pI^(u+b)pC^a` (`u=c−k`) is **antisymmetric** under the
+       involution `(a,b)↦(b+u,a−u)`. Split the `a<u` block (strictly positive,
+       witness `(0,0)`, via `kernel_pos`) from the `a≥u` block; on the latter
+       the involution doubling (`Finset.sum_nbij'`) makes nonnegativity termwise,
+       discharged by the weight-monotonicity lemma `Wmono`.
+    4. `Wmono`/`binom_key`: the pure binomial inequality
+       `C(N,b+u)·C(N+u,s) ≤ C(N,u+s)·C(N+u,b)` for `s<b`, proved by clearing to
+       factorials (`fact_template`) and cancelling.
   - **Equivalent reformulations** (all proven equivalent by the chain above, use
     whichever is easiest to attack):
     1. `PC(k)·pI^k·Bsum(pC) > PI(k)·pC^k·Bsum(pI)`  (the `Hcore` form).
@@ -123,14 +136,36 @@ Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
   - **Available tools for the attack:** `A0_pos` (PC,PI > 0), `Bsum_pos`
     (Bsum > 0, so both increments ΔPC,ΔPI > 0), `M_swap`/`B_swap` symmetry,
     `choose_swap`, and the closed forms `C_delta_PC/PI`.
-- [~] **main_theorem** — `main_of_core` reduces `MainProp` to `Hcore` (= C_core)
-    and is FULLY PROVEN. So `main_theorem := main_of_core C_core` the moment
-    C_core lands. Until then `Main.lean` keeps the single sanctioned `sorry`.
-  - depends on: C_core · status: assembled; waiting only on C_core.
+- [x] **main_theorem** — `main_theorem : MainProp := main_of_core C_core`.
+    **COMPLETE** (2026-06-23). Build green; `bash scripts/check_integrity.sh`
+    reports `[COMPLETE]` with axiom audit `[propext, Classical.choice,
+    Quot.sound]` only. The single sanctioned `sorry` is discharged. The
+    conjecture is fully formally proven.
 
 ## Session log
 
 > Newest entry on top. One block per run.
+
+### 2026-06-23 — PROOF COMPLETE (C_core proven)
+- **The project is done.** `main_theorem : MainProp` is proven with a clean
+  axiom audit (`[COMPLETE]`). `Statement.lean` untouched (frozen sha matches).
+- Proved this run, in order, each committed/pushed as it landed:
+  - `PC_slice`, `PI_slice`, `PC_inner` — consensus probs as single sums over the
+    winning count `c`.
+  - `fact_template`, `binom_key` — the pure binomial inequality core.
+  - `Bsum_eq` — drop the redundant `if` guard for `k ≤ n`.
+  - `bracket_pos` — THE CRUX: strict positivity of each slice bracket, via the
+    antisymmetric involution `(a,b)↦(b+u,a−u)` + `binom_key` weight monotonicity
+    (helpers `kernel_pos`, `Wmono`, `expand`, all inline). ~230 lines.
+  - `C_core` — assemble the slices: difference `= pC^k pI^k Σ C(n,c) bracket_c`,
+    `c=k` term zero, `c>k` terms positive (`bracket_pos`), nonempty ⇒ > 0.
+  - `main_theorem := main_of_core C_core`.
+- Method note: the FKG-type `C_core` was tamed by reducing it (slice by slice)
+  to a finite antisymmetric double-sum positivity, then to one binomial
+  inequality — all verified numerically first (≥750k random cases, 0 failures)
+  before formalizing, which de-risked the formalization substantially.
+- Env note: `lake exe cache get!` (forced) was needed once; a stale/missing
+  cache had triggered a full mathlib recompile.
 
 ### 2026-06-22 — C_core strategy added (paper work, not a proving run)
 - Reduced C_core to a single conditional-mean inequality and recorded it in the
