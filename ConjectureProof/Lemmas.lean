@@ -266,6 +266,21 @@ lemma Bsum_mono (P : Params) (n k : ℕ) {x y : ℝ} (hy : 0 ≤ y) (hxy : y ≤
   · gcongr
   · exact le_refl _
 
+/-- Atomic term-sign fact for the double-sum / FKG attack: with `0 ≤ pI ≤ pC`,
+the "aligned" monomial dominates the "crossed" one whenever its `pC`-exponent is
+the larger, `pC^b·pI^a ≤ pC^a·pI^b` for `b ≤ a`.  In the double sum each pair
+`(x,y)` contributes `κ_x κ_y pR^… (pC^{c_x+i_y} pI^{i_x+c_y} − pC^{i_x+c_y}
+pI^{c_x+i_y})`, whose sign is exactly `sign((c_x−i_x) − (c_y−i_y))` via this
+lemma. -/
+lemma pow_mul_antitone {pC pI : ℝ} (hpI : 0 ≤ pI) (h : pI ≤ pC) {a b : ℕ}
+    (hab : b ≤ a) : pC ^ b * pI ^ a ≤ pC ^ a * pI ^ b := by
+  obtain ⟨d, rfl⟩ := Nat.exists_eq_add_of_le hab
+  have hpC : (0 : ℝ) ≤ pC := le_trans hpI h
+  rw [pow_add, pow_add]
+  have h1 : pI ^ d ≤ pC ^ d := by gcongr
+  have hbase : (0 : ℝ) ≤ pC ^ b * pI ^ b := by positivity
+  nlinarith [mul_le_mul_of_nonneg_left h1 hbase]
+
 /-- **Strict** monotonicity of `Bsum` in the per-agent weight, when there is at
 least the `i = 1` term in range (`2 ≤ k` and `k + 1 ≤ n`).  This is where the
 strictness of `C_core` ultimately comes from: for `k = 1` the boundary sum is the

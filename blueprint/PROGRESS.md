@@ -151,6 +151,11 @@ Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
       the un-factored slice form the double-sum (FKG) attack needs. Proof: peel
       `Icc k n = insert k (Icc (k+1) n)`, `sum_insert`, `add_sub_cancel_right`
       (`Rk_PI` via `PI_reindex` first).
+    - `pow_mul_antitone` : `0 ≤ pI ≤ pC → b ≤ a → pC^b·pI^a ≤ pC^a·pI^b`. The
+      atomic term-sign fact: each double-sum pair contributes
+      `κ_xκ_y·pR^…·(pC^{c_x+i_y}pI^{i_x+c_y} − pC^{i_x+c_y}pI^{c_x+i_y})`, whose
+      sign is `sign((c_x−i_x)−(c_y−i_y))` precisely by this lemma. Proof:
+      `a=b+d`, factor `pC^b·pI^b`, `gcongr` for `pI^d ≤ pC^d`, `nlinarith`.
 - [~] **main_theorem** — `main_of_core` reduces `MainProp` to `Hcore` (= C_core)
     and is FULLY PROVEN. So `main_theorem := main_of_core C_core` the moment
     C_core lands. Until then `Main.lean` keeps the single sanctioned `sorry`.
@@ -165,7 +170,7 @@ Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
   (`avg_{T_{k+1}} t^(c−i) > avg_{R_k} t^(c−i)`, genuinely NOT termwise — the
   FKG/double-sum positivity), so per CLAUDE.md no partial/blind C_core was
   committed. Build stayed green throughout.
-- Proved and pushed five fully-verified helper lemmas in `Lemmas.lean`:
+- Proved and pushed six fully-verified helper lemmas in `Lemmas.lean`:
   `PI_reindex` (PC & PI over the common set T_k), `Bsum_mono` (Bsum ↑ in x),
   `Bsum_lt` (strict, k≥2), `core_iff_mediant` (C_core ⟺ its k+1 / mediant form;
   R_k cancels), and `Rk_PC`/`Rk_PI` (the removed slice as explicit column sums).
@@ -179,6 +184,21 @@ Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
   (equivalently `E_{T_{k+1}}[t^{c−i}] > E_{R_k}[t^{c−i}]`, t=pC/pI>1). This is the
   genuinely non-termwise FKG/mediant step; needs a paper pairing argument over the
   trapezoid `c+i≤n` before formalizing. Verify the pairing on small n by hand.
+- PAPER DECOMPOSITION worked out this session (use next time): write
+  `M P n c i = κ(c,i)·pC^c·pI^i·pR^(n−c−i)` with `κ(c,i)=C(n,c)·C(n−c,i)`
+  SWAP-SYMMETRIC (`κ(c,i)=κ(i,c)`, = `choose_swap`). Then for `x=(c,i)∈T_{k+1}`,
+  `y=(k,j)∈R_k`, a single pair term of `D := PC(k+1)·ΔPI − PI(k+1)·ΔPC` equals
+    `κ_x·κ_y·pR^{(n−c−i)+(n−k−j)}·( pC^{c+j}pI^{i+k} − pC^{i+k}pI^{c+j} )`.
+  By `pow_mul_antitone` the bracket has sign `sign((c−i) − (k−j)) = sign(d_x−d_y)`,
+  `d_x=c−i≥1`, `d_y=k−j∈[1,k]`. So `D = Σ_{x,y} (positive)·sign(d_x−d_y)`. The
+  bracket is NOT pointwise ≥0 (pairs with `d_x<d_y` exist), so the remaining task
+  is to show the positive-sign mass outweighs the negative — the true FKG content.
+  Candidate: an involution/injection on `T_{k+1}×R_k` that pairs each negative term
+  with a dominating positive one; the `pR>0` factor and the `c+i≤n` boundary are
+  the obstructions (boundary kills the naive `(k,j)↦(k+1,j)` shift when `k+j=n`).
+  All algebraic ingredients (`Rk_PC/PI`, `PI_reindex`, `pow_mul_antitone`,
+  `choose_swap`, `Bsum_lt`) are now in place; only the combinatorial pairing
+  remains, and it needs a correct paper argument FIRST.
 
 ### 2026-06-22 — C_core strategy added (paper work, not a proving run)
 - Reduced C_core to a single conditional-mean inequality and recorded it in the
