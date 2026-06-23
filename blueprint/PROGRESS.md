@@ -139,6 +139,18 @@ Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
       whole content of `C_core` now lives in the `k+1` ("mediant") form — the next
       session can attack that directly. Proof: substitute `C_delta_PC/PI`, the
       cross `C(n,k)·pC^k·BI·pI^k·BC` terms cancel by ring, `nlinarith`.
+    - `Bsum_lt` : STRICT monotonicity of `Bsum` in `x` when `2 ≤ k` and `k+1 ≤ n`
+      (so the `i=1` term, `(n-k)·x·pR^(n-k-1)`, is in range and strictly ↑).
+      Gives `Bsum(pI) < Bsum(pC)` for `k≥2`. This is where the strictness and the
+      `pR>0` hypothesis genuinely enter (for `k=1`, `Bsum` ≡ `pR^(n-1)`, constant).
+      Proof: `Finset.sum_lt_sum` (termwise `gcongr` `≤`, strict at `i=1` via
+      `mul_lt_mul_of_pos_left/right`).
+    - `Rk_PC`, `Rk_PI` : the removed slice as explicit single sums over the `c=k`
+      column — `PC k − PC(k+1) = Σ_{i<k}[k+i≤n] M P n k i` and
+      `PI k − PI(k+1) = Σ_{i<k}[k+i≤n] M P n i k`. Same content as `C_delta` but in
+      the un-factored slice form the double-sum (FKG) attack needs. Proof: peel
+      `Icc k n = insert k (Icc (k+1) n)`, `sum_insert`, `add_sub_cancel_right`
+      (`Rk_PI` via `PI_reindex` first).
 - [~] **main_theorem** — `main_of_core` reduces `MainProp` to `Hcore` (= C_core)
     and is FULLY PROVEN. So `main_theorem := main_of_core C_core` the moment
     C_core lands. Until then `Main.lean` keeps the single sanctioned `sorry`.
@@ -153,15 +165,20 @@ Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
   (`avg_{T_{k+1}} t^(c−i) > avg_{R_k} t^(c−i)`, genuinely NOT termwise — the
   FKG/double-sum positivity), so per CLAUDE.md no partial/blind C_core was
   committed. Build stayed green throughout.
-- Proved and pushed three fully-verified helper lemmas in `Lemmas.lean`:
+- Proved and pushed five fully-verified helper lemmas in `Lemmas.lean`:
   `PI_reindex` (PC & PI over the common set T_k), `Bsum_mono` (Bsum ↑ in x),
-  `core_iff_mediant` (C_core ⟺ its k+1 / mediant form; R_k cancels). These
-  realize steps 1 & 3 of the recorded attack and isolate the remaining content.
+  `Bsum_lt` (strict, k≥2), `core_iff_mediant` (C_core ⟺ its k+1 / mediant form;
+  R_k cancels), and `Rk_PC`/`Rk_PI` (the removed slice as explicit column sums).
+  These realize steps 1 & 3 of the recorded attack, supply the strictness
+  ingredient, and expose all four sums needed for the double-sum positivity.
 - Next frontier: the boxed mediant inequality, now in `core_iff_mediant`'s RHS
-  form. Recommended: (i) prove strict `Bsum` monotonicity (k≥2); (ii) express
-  ΔPC,ΔPI as the R_k slice sums and PC(k+1),PI(k+1) via the reindex, then attempt
-  avenue (a) (finite double-sum positivity `ΣΣ(w_x−w_y)μ_xμ_y > 0`) on small n by
-  hand before formalizing the pairing.
+  form. All ingredients for avenue (a) are now lemmas: PC(k+1)=Σ_{T_{k+1}}M(c,i)
+  (def), PI(k+1)=Σ_{T_{k+1}}M(i,c) (`PI_reindex`), and the two `Rk_*` slice sums.
+  Remaining content = the finite double-sum positivity
+  `Σ_{x∈T_{k+1}}Σ_{y∈R_k}(M(c_x,i_x)M(i_y,c_y) − M(i_x,c_x)M(c_y,i_y)) > 0`
+  (equivalently `E_{T_{k+1}}[t^{c−i}] > E_{R_k}[t^{c−i}]`, t=pC/pI>1). This is the
+  genuinely non-termwise FKG/mediant step; needs a paper pairing argument over the
+  trapezoid `c+i≤n` before formalizing. Verify the pairing on small n by hand.
 
 ### 2026-06-22 — C_core strategy added (paper work, not a proving run)
 - Reduced C_core to a single conditional-mean inequality and recorded it in the

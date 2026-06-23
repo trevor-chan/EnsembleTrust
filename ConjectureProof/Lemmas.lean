@@ -266,6 +266,31 @@ lemma Bsum_mono (P : Params) (n k : ℕ) {x y : ℝ} (hy : 0 ≤ y) (hxy : y ≤
   · gcongr
   · exact le_refl _
 
+/-- **Strict** monotonicity of `Bsum` in the per-agent weight, when there is at
+least the `i = 1` term in range (`2 ≤ k` and `k + 1 ≤ n`).  This is where the
+strictness of `C_core` ultimately comes from: for `k = 1` the boundary sum is the
+constant `pR^(n-1)` and `Bsum(pC) = Bsum(pI)`, matching the blueprint note that
+strictness needs the `i ≥ 1` terms (and `pR > 0`). -/
+lemma Bsum_lt (P : Params) (n k : ℕ) (hk2 : 2 ≤ k) (hkn : k + 1 ≤ n) {x y : ℝ}
+    (hy : 0 ≤ y) (hxy : y < x) : Bsum P n k y < Bsum P n k x := by
+  have hpR := P.pR_pos.le
+  unfold Bsum
+  apply Finset.sum_lt_sum
+  · intro i _
+    split_ifs with h
+    · gcongr
+    · exact le_refl _
+  · refine ⟨1, Finset.mem_range.mpr (by omega), ?_⟩
+    rw [if_pos (by omega), if_pos (by omega)]
+    have hnk : 1 ≤ n - k := by omega
+    have hcpos : (0 : ℝ) < (Nat.choose (n - k) 1 : ℝ) := by
+      rw [Nat.choose_one_right]; exact_mod_cast hnk
+    have hpRpow : (0 : ℝ) < P.pR ^ (n - k - 1) := pow_pos P.pR_pos _
+    simp only [pow_one]
+    have h1 : (Nat.choose (n - k) 1 : ℝ) * y < (Nat.choose (n - k) 1 : ℝ) * x :=
+      mul_lt_mul_of_pos_left hxy hcpos
+    exact mul_lt_mul_of_pos_right h1 hpRpow
+
 /-- The "self-similar" / mediant reformulation of the core comparison: granting
 the `C_delta` closed forms, the core inequality at threshold `k` is *equivalent*
 to the same-shaped inequality with the consensus probabilities evaluated at
@@ -284,6 +309,31 @@ lemma core_iff_mediant (P : Params) (n k : ℕ) (hk : k ≤ n) :
     have := C_delta_PI P n k hk; linarith
   rw [e1, e2]
   constructor <;> intro h <;> nlinarith [h]
+
+/-- The removed boundary slice `R_k` of the correct-consensus sum, written as an
+explicit single sum over the `c = k` column: `PC k − PC (k+1) = Σ_{i<k} [k+i≤n]
+M P n k i`.  (Same content as `C_delta_PC` but kept in slice form, not factored
+through `Bsum` — this is the form the double-sum / FKG attack needs.) -/
+lemma Rk_PC (P : Params) (n k : ℕ) (hk : k ≤ n) :
+    PC P n k - PC P n (k + 1)
+      = ∑ i ∈ Finset.range k, if k + i ≤ n then M P n k i else 0 := by
+  have hins : Finset.Icc k n = insert k (Finset.Icc (k + 1) n) := by
+    ext x; simp only [Finset.mem_Icc, Finset.mem_insert]; omega
+  have hnm : k ∉ Finset.Icc (k + 1) n := by simp [Finset.mem_Icc]
+  unfold PC
+  rw [hins, Finset.sum_insert hnm, add_sub_cancel_right]
+
+/-- The specious counterpart of `Rk_PC`, via the reindexed `PI`:
+`PI k − PI (k+1) = Σ_{i<k} [k+i≤n] M P n i k` (the `c = k` column, reflected
+weight). -/
+lemma Rk_PI (P : Params) (n k : ℕ) (hk : k ≤ n) :
+    PI P n k - PI P n (k + 1)
+      = ∑ i ∈ Finset.range k, if k + i ≤ n then M P n i k else 0 := by
+  have hins : Finset.Icc k n = insert k (Finset.Icc (k + 1) n) := by
+    ext x; simp only [Finset.mem_Icc, Finset.mem_insert]; omega
+  have hnm : k ∉ Finset.Icc (k + 1) n := by simp [Finset.mem_Icc]
+  rw [PI_reindex P n k, PI_reindex P n (k + 1), hins, Finset.sum_insert hnm,
+    add_sub_cancel_right]
 
 /-! ## A_trust_iff_ratio — trust-monotonicity is ratio-monotonicity. -/
 
