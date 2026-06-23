@@ -394,6 +394,246 @@ lemma A_trust_iff_ratio (P : Params) (n k : ℕ) (hn : 1 ≤ n) (hk1 : k ≤ n)
     (PC_pos P n (k + 1) hn hk2) (PI_pos P n (k + 1) hn hk2)
   rw [gt_iff_lt, h]
 
+
+/-! ## bracket_pos — strict positivity of each slice bracket (the crux of C_core).
+
+Using the slice decomposition, `C_core` reduces to showing each per-`c` bracket
+`pC^(c-k)·Bsum(n,c,pI)·Bsum(n,k,pC) − pI^(c-k)·Bsum(n,c,pC)·Bsum(n,k,pI)` is positive.
+This is a correlation/FKG-type inequality: its double-sum kernel is antisymmetric
+under `(a,b) ↦ (b+u, a−u)` (`u=c−k`), and the weight monotonicity that makes the
+paired terms nonnegative is exactly `binom_key`. -/
+lemma bracket_pos (P : Params) (n k c : ℕ) (hk1 : 1 ≤ k) (hkc : k < c) (hcn : c ≤ n)
+    (hlt : P.pI < P.pC) :
+    P.pI ^ (c - k) * Bsum P n c P.pC * Bsum P n k P.pI
+      < P.pC ^ (c - k) * Bsum P n c P.pI * Bsum P n k P.pC := by
+  have hkn : k ≤ n := by omega
+  have hpC := P.pC_pos
+  have hpI := P.pI_pos
+  have hpR := P.pR_pos
+  set u := c - k with hu
+  -- weight and kernel of the (a,b) double sum
+  set W : ℕ → ℕ → ℝ := fun a b =>
+    ((n - c).choose a : ℝ) * ((n - k).choose b : ℝ) * P.pR ^ (n - c - a) * P.pR ^ (n - k - b)
+    with hW
+  set Kr : ℕ → ℕ → ℝ := fun a b =>
+    P.pC ^ (u + b) * P.pI ^ a - P.pI ^ (u + b) * P.pC ^ a with hKr
+  -- a helper to expand `e * (∑ F) * (∑ G)` into a double sum
+  have expand : ∀ (e : ℝ) (F G : ℕ → ℝ),
+      e * (∑ a ∈ range c, F a) * (∑ b ∈ range k, G b)
+        = ∑ a ∈ range c, ∑ b ∈ range k, e * F a * G b := by
+    intro e F G
+    rw [mul_assoc, Finset.sum_mul_sum, Finset.mul_sum]
+    refine Finset.sum_congr rfl (fun a _ => ?_)
+    rw [Finset.mul_sum]
+    exact Finset.sum_congr rfl (fun b _ => by ring)
+  -- the core identity: RHS - LHS = double sum of W*Kr
+  have key : P.pC ^ u * Bsum P n c P.pI * Bsum P n k P.pC
+      - P.pI ^ u * Bsum P n c P.pC * Bsum P n k P.pI
+      = ∑ a ∈ range c, ∑ b ∈ range k, W a b * Kr a b := by
+    rw [Bsum_eq P n c hcn, Bsum_eq P n c hcn, Bsum_eq P n k hkn, Bsum_eq P n k hkn]
+    rw [expand (P.pC ^ u)
+          (fun a => ((n - c).choose a : ℝ) * P.pI ^ a * P.pR ^ (n - c - a))
+          (fun b => ((n - k).choose b : ℝ) * P.pC ^ b * P.pR ^ (n - k - b)),
+        expand (P.pI ^ u)
+          (fun a => ((n - c).choose a : ℝ) * P.pC ^ a * P.pR ^ (n - c - a))
+          (fun b => ((n - k).choose b : ℝ) * P.pI ^ b * P.pR ^ (n - k - b))]
+    rw [← Finset.sum_sub_distrib]
+    refine Finset.sum_congr rfl (fun a _ => ?_)
+    rw [← Finset.sum_sub_distrib]
+    refine Finset.sum_congr rfl (fun b _ => ?_)
+    simp only [hW, hKr]
+    ring
+  -- reduce the goal to positivity of the double sum
+  rw [← sub_pos]
+  have hgoal : P.pC ^ (c - k) * Bsum P n c P.pI * Bsum P n k P.pC
+      - P.pI ^ (c - k) * Bsum P n c P.pC * Bsum P n k P.pI
+      = ∑ a ∈ range c, ∑ b ∈ range k, W a b * Kr a b := by
+    rw [← hu]; exact key
+  rw [hgoal]
+  -- nonnegativity of the weight
+  have hWnn : ∀ a b, 0 ≤ W a b := by
+    intro a b; rw [hW]; positivity
+  -- strict kernel positivity when the exponent of the larger probability dominates
+  have kernel_pos : ∀ (m a : ℕ), a < m → P.pI ^ m * P.pC ^ a < P.pC ^ m * P.pI ^ a := by
+    intro m a ham
+    have hpow : P.pI ^ (m - a) < P.pC ^ (m - a) :=
+      pow_lt_pow_left₀ hlt (le_of_lt hpI) (by omega)
+    have h1 : P.pI ^ m = P.pI ^ (m - a) * P.pI ^ a := by rw [← pow_add]; congr 1; omega
+    have h2 : P.pC ^ m = P.pC ^ (m - a) * P.pC ^ a := by rw [← pow_add]; congr 1; omega
+    calc P.pI ^ m * P.pC ^ a = P.pI ^ (m - a) * (P.pI ^ a * P.pC ^ a) := by rw [h1]; ring
+      _ < P.pC ^ (m - a) * (P.pI ^ a * P.pC ^ a) := by
+            apply mul_lt_mul_of_pos_right hpow; positivity
+      _ = P.pC ^ m * P.pI ^ a := by rw [h2]; ring
+  -- the kernel is positive on the relevant region
+  have hKr_pos : ∀ a b, a < u + b → 0 < Kr a b := by
+    intro a b hab
+    rw [hKr]
+    have := kernel_pos (u + b) a hab
+    linarith
+  -- weight monotonicity, the heart of the pairing, supplied by `binom_key`
+  have Wmono : ∀ a b, u ≤ a → a < c → b < k → a < u + b →
+      W (b + u) (a - u) ≤ W a b := by
+    intro a b hua hac hbk hab
+    have hnk : n - k = (n - c) + u := by omega
+    have hnat : (n - c).choose (b + u) * (n - k).choose (a - u)
+        ≤ (n - c).choose a * (n - k).choose b := by
+      have hkey := binom_key (n - c) u (a - u) b (by omega)
+      rw [show u + (a - u) = a by omega] at hkey
+      rw [hnk]; exact hkey
+    by_cases hzero : (n - c).choose (b + u) * (n - k).choose (a - u) = 0
+    · have hz : W (b + u) (a - u) = 0 := by
+        have hz2 : ((n - c).choose (b + u) : ℝ) * ((n - k).choose (a - u) : ℝ) = 0 := by
+          rw [← Nat.cast_mul, hzero, Nat.cast_zero]
+        simp only [hW]
+        linear_combination
+          (P.pR ^ (n - c - (b + u)) * P.pR ^ (n - k - (a - u))) * hz2
+      rw [hz]; exact hWnn a b
+    · -- all four coefficients in range, so the `pR` powers match
+      have hbu : b + u ≤ n - c := by
+        by_contra h
+        apply hzero
+        rw [show (n - c).choose (b + u) = 0 from Nat.choose_eq_zero_of_lt (by omega),
+          Nat.zero_mul]
+      have hau : a - u ≤ n - k := by
+        by_contra h
+        apply hzero
+        rw [show (n - k).choose (a - u) = 0 from Nat.choose_eq_zero_of_lt (by omega),
+          Nat.mul_zero]
+      have han : a ≤ n - c := by
+        by_contra h
+        apply hzero
+        have h0 : (n - c).choose a * (n - k).choose b = 0 := by
+          rw [show (n - c).choose a = 0 from Nat.choose_eq_zero_of_lt (by omega), Nat.zero_mul]
+        omega
+      have hbn : b ≤ n - k := by
+        by_contra h
+        apply hzero
+        have h0 : (n - c).choose a * (n - k).choose b = 0 := by
+          rw [show (n - k).choose b = 0 from Nat.choose_eq_zero_of_lt (by omega), Nat.mul_zero]
+        omega
+      have hExp : (n - c - (b + u)) + (n - k - (a - u)) = (n - c - a) + (n - k - b) := by omega
+      have hReq : P.pR ^ (n - c - (b + u)) * P.pR ^ (n - k - (a - u))
+          = P.pR ^ (n - c - a) * P.pR ^ (n - k - b) := by
+        rw [← pow_add, ← pow_add, hExp]
+      have hcast : ((n - c).choose (b + u) : ℝ) * ((n - k).choose (a - u) : ℝ)
+          ≤ ((n - c).choose a : ℝ) * ((n - k).choose b : ℝ) := by exact_mod_cast hnat
+      simp only [hW]
+      calc ((n - c).choose (b + u) : ℝ) * ((n - k).choose (a - u) : ℝ)
+              * P.pR ^ (n - c - (b + u)) * P.pR ^ (n - k - (a - u))
+          = (((n - c).choose (b + u) : ℝ) * ((n - k).choose (a - u) : ℝ))
+              * (P.pR ^ (n - c - (b + u)) * P.pR ^ (n - k - (a - u))) := by ring
+        _ = (((n - c).choose (b + u) : ℝ) * ((n - k).choose (a - u) : ℝ))
+              * (P.pR ^ (n - c - a) * P.pR ^ (n - k - b)) := by rw [hReq]
+        _ ≤ (((n - c).choose a : ℝ) * ((n - k).choose b : ℝ))
+              * (P.pR ^ (n - c - a) * P.pR ^ (n - k - b)) := by
+            apply mul_le_mul_of_nonneg_right hcast; positivity
+        _ = ((n - c).choose a : ℝ) * ((n - k).choose b : ℝ)
+              * P.pR ^ (n - c - a) * P.pR ^ (n - k - b) := by ring
+  -- the kernel is anti-symmetric under the pairing `(a,b) ↦ (b+u, a-u)`
+  have hKr_neg : ∀ a b, u ≤ a → Kr (b + u) (a - u) = - Kr a b := by
+    intro a b hua
+    simp only [hKr]
+    rw [show u + (a - u) = a by omega]; ring
+  set F : ℕ → ℝ := fun a => ∑ b ∈ range k, W a b * Kr a b with hF
+  -- split the outer range at `u`
+  have hsplit : (∑ a ∈ range c, F a)
+      = (∑ a ∈ range u, F a) + ∑ a ∈ Ico u c, F a := by
+    rw [range_eq_Ico, range_eq_Ico]
+    exact (Finset.sum_Ico_consecutive F (Nat.zero_le u) (by omega)).symm
+  rw [show (∑ a ∈ range c, ∑ b ∈ range k, W a b * Kr a b) = ∑ a ∈ range c, F a from rfl, hsplit]
+  -- the `a < u` block is strictly positive
+  have hExtra : 0 < ∑ a ∈ range u, F a := by
+    apply Finset.sum_pos'
+    · intro a ha
+      rw [Finset.mem_range] at ha
+      rw [hF]
+      apply Finset.sum_nonneg
+      intro b hb
+      rw [Finset.mem_range] at hb
+      exact mul_nonneg (hWnn a b) (le_of_lt (hKr_pos a b (by omega)))
+    · refine ⟨0, Finset.mem_range.mpr (by omega), ?_⟩
+      rw [hF]
+      apply Finset.sum_pos'
+      · intro b hb
+        rw [Finset.mem_range] at hb
+        exact mul_nonneg (hWnn 0 b) (le_of_lt (hKr_pos 0 b (by omega)))
+      · refine ⟨0, Finset.mem_range.mpr (by omega), ?_⟩
+        have hWpos : 0 < W 0 0 := by
+          rw [hW]; simp only [Nat.choose_zero_right, Nat.cast_one, one_mul]; positivity
+        exact mul_pos hWpos (hKr_pos 0 0 (by omega))
+  -- the `a ≥ u` block is nonnegative, by the involution doubling
+  have hPair : 0 ≤ ∑ a ∈ Ico u c, F a := by
+    simp only [hF]
+    rw [← Finset.sum_product']
+    set prod := (Ico u c) ×ˢ (range k) with hprod
+    set σ : ℕ × ℕ → ℕ × ℕ := fun p => (p.2 + u, p.1 - u) with hσ
+    have hmem : ∀ p ∈ prod, σ p ∈ prod := by
+      intro p hp
+      simp only [hprod, Finset.mem_product, Finset.mem_Ico, Finset.mem_range, hσ] at hp ⊢
+      omega
+    have hinv : ∀ p ∈ prod, σ (σ p) = p := by
+      intro p hp
+      simp only [hprod, Finset.mem_product, Finset.mem_Ico, Finset.mem_range] at hp
+      simp only [hσ, Prod.ext_iff]
+      omega
+    -- reindex by σ
+    have hreindex : (∑ p ∈ prod, W p.1 p.2 * Kr p.1 p.2)
+        = ∑ p ∈ prod, W (σ p).1 (σ p).2 * Kr (σ p).1 (σ p).2 := by
+      refine Finset.sum_nbij' σ σ hmem hmem hinv hinv ?_
+      intro p hp
+      rw [hinv p hp]
+    -- f(σp) = - W(σp) * Kr(p)
+    have hB : (∑ p ∈ prod, W (σ p).1 (σ p).2 * Kr (σ p).1 (σ p).2)
+        = - ∑ p ∈ prod, W (σ p).1 (σ p).2 * Kr p.1 p.2 := by
+      rw [← Finset.sum_neg_distrib]
+      apply Finset.sum_congr rfl
+      intro p hp
+      rw [hprod, Finset.mem_product, Finset.mem_Ico, Finset.mem_range] at hp
+      have : Kr (σ p).1 (σ p).2 = - Kr p.1 p.2 := by
+        rw [hσ]; exact hKr_neg p.1 p.2 (by omega)
+      rw [this]; ring
+    -- 2A = ∑ (W p - W σp) Kr p
+    have hdouble : 2 * (∑ p ∈ prod, W p.1 p.2 * Kr p.1 p.2)
+        = ∑ p ∈ prod, (W p.1 p.2 - W (σ p).1 (σ p).2) * Kr p.1 p.2 := by
+      have hAeq : (∑ p ∈ prod, W p.1 p.2 * Kr p.1 p.2)
+          = - ∑ p ∈ prod, W (σ p).1 (σ p).2 * Kr p.1 p.2 := hreindex.trans hB
+      have hexp : ∑ p ∈ prod, (W p.1 p.2 - W (σ p).1 (σ p).2) * Kr p.1 p.2
+          = (∑ p ∈ prod, W p.1 p.2 * Kr p.1 p.2)
+            - ∑ p ∈ prod, W (σ p).1 (σ p).2 * Kr p.1 p.2 := by
+        rw [← Finset.sum_sub_distrib]
+        apply Finset.sum_congr rfl
+        intro p _; ring
+      rw [hexp]; linarith [hAeq]
+    -- each term is nonnegative
+    have hterm : ∀ p ∈ prod, 0 ≤ (W p.1 p.2 - W (σ p).1 (σ p).2) * Kr p.1 p.2 := by
+      intro p hp
+      rw [hprod, Finset.mem_product, Finset.mem_Ico, Finset.mem_range] at hp
+      obtain ⟨⟨h1, h2⟩, h3⟩ := hp
+      rcases lt_trichotomy p.1 (u + p.2) with hlt' | heq' | hgt'
+      · -- Kr > 0, W p ≥ W σp
+        have hKpos : 0 < Kr p.1 p.2 := hKr_pos p.1 p.2 hlt'
+        have hWle : W (σ p).1 (σ p).2 ≤ W p.1 p.2 := by
+          rw [hσ]; exact Wmono p.1 p.2 h1 h2 h3 hlt'
+        nlinarith [hKpos, hWle]
+      · -- Kr = 0
+        have hz : Kr p.1 p.2 = 0 := by rw [hKr, heq']; ring
+        simp [hz]
+      · -- Kr < 0, W p ≤ W σp
+        have hKneg : Kr p.1 p.2 < 0 := by
+          rw [hKr]
+          have := kernel_pos p.1 (u + p.2) (by omega)
+          nlinarith [this]
+        have hWle : W p.1 p.2 ≤ W (σ p).1 (σ p).2 := by
+          rw [hσ]
+          have hh := Wmono (p.2 + u) (p.1 - u) (by omega) (by omega) (by omega) (by omega)
+          rw [show (p.1 - u) + u = p.1 by omega, show (p.2 + u) - u = p.2 by omega] at hh
+          exact hh
+        nlinarith [hKneg, hWle]
+    have hsum_nn : 0 ≤ ∑ p ∈ prod, (W p.1 p.2 - W (σ p).1 (σ p).2) * Kr p.1 p.2 :=
+      Finset.sum_nonneg hterm
+    linarith [hdouble, hsum_nn]
+  linarith
+
 /-! ## Assembly — `MainProp` modulo the single core inequality `C_core`. -/
 
 /-- **Reduction of the conjecture to one inequality.**  Granting `C_core` — that
