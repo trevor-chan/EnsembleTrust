@@ -234,6 +234,57 @@ lemma core_R_swap (P : Params) (n k : ℕ) :
       = PC P n k * P.pI ^ k * Bsum P n k P.pC := by
   rw [B_swap (swap P) n k, swap_swap, swap_pC, swap_pI, Bsum_swap]
 
+/-! ## Toward C_core — reindexing and monotonicity infrastructure.
+
+These are fully-proven helper lemmas that sharpen the reduction of `C_core`
+toward the single "mediant" inequality (see blueprint/PROGRESS.md, C_core entry).
+None of them introduces a placeholder; each is verified on its own. -/
+
+/-- `PI` reindexed onto the SAME index set as `PC` — the "correct-shaped" region
+`c ∈ [k,n]`, `i < c`, `c + i ≤ n` — but carrying the *reflected* weight
+`M P n i c`.  This is just an α-renaming of the bound variables of `PI` together
+with commutativity of `+` in the cutoff condition.  Combined with the definition
+of `PC`, it puts `PC k = Σ_{T_k} M(c,i)` and `PI k = Σ_{T_k} M(i,c)` over one
+common index set `T_k`, the starting point of the mediant argument. -/
+lemma PI_reindex (P : Params) (n k : ℕ) :
+    PI P n k = ∑ c ∈ Finset.Icc k n, ∑ i ∈ Finset.range c,
+      if c + i ≤ n then M P n i c else 0 := by
+  unfold PI
+  refine Finset.sum_congr rfl (fun c _ => Finset.sum_congr rfl (fun i _ => ?_))
+  rw [Nat.add_comm]
+
+/-- `Bsum` is monotone in its per-agent weight `x` on `0 ≤ x`: each summand
+`C(n-k,i)·x^i·pR^(n-k-i)` is monotone in `x`.  In particular
+`Bsum P n k P.pI ≤ Bsum P n k P.pC` whenever `pI ≤ pC`. -/
+lemma Bsum_mono (P : Params) (n k : ℕ) {x y : ℝ} (hy : 0 ≤ y) (hxy : y ≤ x) :
+    Bsum P n k y ≤ Bsum P n k x := by
+  have hpR := P.pR_pos.le
+  unfold Bsum
+  apply Finset.sum_le_sum
+  intro i _
+  split_ifs with h
+  · gcongr
+  · exact le_refl _
+
+/-- The "self-similar" / mediant reformulation of the core comparison: granting
+the `C_delta` closed forms, the core inequality at threshold `k` is *equivalent*
+to the same-shaped inequality with the consensus probabilities evaluated at
+`k+1`.  (Reformulation 5 in the C_core blueprint entry: the boundary slice
+`R_k` cancels, leaving the comparison between the surviving blocs.)  The genuine
+content of `C_core` is therefore concentrated entirely in this `k+1` form. -/
+lemma core_iff_mediant (P : Params) (n k : ℕ) (hk : k ≤ n) :
+    (PC P n k * P.pI ^ k * Bsum P n k P.pC > PI P n k * P.pC ^ k * Bsum P n k P.pI)
+      ↔ (PC P n (k + 1) * P.pI ^ k * Bsum P n k P.pC
+          > PI P n (k + 1) * P.pC ^ k * Bsum P n k P.pI) := by
+  have e1 : PC P n k
+      = PC P n (k + 1) + (n.choose k : ℝ) * P.pC ^ k * Bsum P n k P.pI := by
+    have := C_delta_PC P n k hk; linarith
+  have e2 : PI P n k
+      = PI P n (k + 1) + (n.choose k : ℝ) * P.pI ^ k * Bsum P n k P.pC := by
+    have := C_delta_PI P n k hk; linarith
+  rw [e1, e2]
+  constructor <;> intro h <;> nlinarith [h]
+
 /-! ## A_trust_iff_ratio — trust-monotonicity is ratio-monotonicity. -/
 
 /-- Abstract monotonicity: for positive `a b c d`, `a/(a+b) < c/(c+d)` iff the

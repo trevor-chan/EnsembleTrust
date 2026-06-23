@@ -123,6 +123,22 @@ Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
   - **Available tools for the attack:** `A0_pos` (PC,PI > 0), `Bsum_pos`
     (Bsum > 0, so both increments ΔPC,ΔPI > 0), `M_swap`/`B_swap` symmetry,
     `choose_swap`, and the closed forms `C_delta_PC/PI`.
+    NEW (2026-06-23): `PI_reindex`, `Bsum_mono`, `core_iff_mediant` — see below.
+  - **Infrastructure proven 2026-06-23 (all fully verified, no placeholder):**
+    - `PI_reindex` : `PI P n k = Σ_{c∈Icc k n} Σ_{i∈range c} [c+i≤n] M P n i c`.
+      Puts PC and PI over the SAME index set `T_k` with reflected weights —
+      exactly step 1 of the mediant attack. Proof: α-rename the bound vars of
+      `PI` (`sum_congr` twice) + `Nat.add_comm` in the cutoff.
+    - `Bsum_mono` : `0 ≤ y → y ≤ x → Bsum P n k y ≤ Bsum P n k x`. Termwise
+      `gcongr` (each summand `C(n-k,i)·x^i·pR^(n-k-i)` is ↑ in x). Gives
+      `Bsum(pI) ≤ Bsum(pC)` for free. (Strict version for k≥2 not yet done — the
+      i=1 term `C(n-k,1)·x·pR^(n-k-1)` is strictly ↑; needs `1<k ∧ k+1≤n`.)
+    - `core_iff_mediant` : the `Hcore`-at-`k` core comparison is EQUIVALENT to the
+      same-shaped comparison with `PC,PI` at `k+1` (reformulation 5). The boundary
+      slice `R_k` cancels algebraically (via the `C_delta` closed forms). So the
+      whole content of `C_core` now lives in the `k+1` ("mediant") form — the next
+      session can attack that directly. Proof: substitute `C_delta_PC/PI`, the
+      cross `C(n,k)·pC^k·BI·pI^k·BC` terms cancel by ring, `nlinarith`.
 - [~] **main_theorem** — `main_of_core` reduces `MainProp` to `Hcore` (= C_core)
     and is FULLY PROVEN. So `main_theorem := main_of_core C_core` the moment
     C_core lands. Until then `Main.lean` keeps the single sanctioned `sorry`.
@@ -131,6 +147,21 @@ Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
 ## Session log
 
 > Newest entry on top. One block per run.
+
+### 2026-06-23 — mediant infrastructure for C_core (3 lemmas proven)
+- C_core remains the SOLE open frontier; it is a research-level inequality
+  (`avg_{T_{k+1}} t^(c−i) > avg_{R_k} t^(c−i)`, genuinely NOT termwise — the
+  FKG/double-sum positivity), so per CLAUDE.md no partial/blind C_core was
+  committed. Build stayed green throughout.
+- Proved and pushed three fully-verified helper lemmas in `Lemmas.lean`:
+  `PI_reindex` (PC & PI over the common set T_k), `Bsum_mono` (Bsum ↑ in x),
+  `core_iff_mediant` (C_core ⟺ its k+1 / mediant form; R_k cancels). These
+  realize steps 1 & 3 of the recorded attack and isolate the remaining content.
+- Next frontier: the boxed mediant inequality, now in `core_iff_mediant`'s RHS
+  form. Recommended: (i) prove strict `Bsum` monotonicity (k≥2); (ii) express
+  ΔPC,ΔPI as the R_k slice sums and PC(k+1),PI(k+1) via the reindex, then attempt
+  avenue (a) (finite double-sum positivity `ΣΣ(w_x−w_y)μ_xμ_y > 0`) on small n by
+  hand before formalizing the pairing.
 
 ### 2026-06-22 — C_core strategy added (paper work, not a proving run)
 - Reduced C_core to a single conditional-mean inequality and recorded it in the
