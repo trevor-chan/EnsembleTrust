@@ -16,7 +16,6 @@ import ConjectureProof.Lemmas
 
 namespace ConjectureProof
 
-theorem main_theorem : MainProp := by
-  sorry
+theorem main_theorem : MainProp := main_of_core C_core
 
 end ConjectureProof

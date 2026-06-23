@@ -634,6 +634,48 @@ lemma bracket_pos (P : Params) (n k c : ℕ) (hk1 : 1 ≤ k) (hkc : k < c) (hcn 
     linarith [hdouble, hsum_nn]
   linarith
 
+/-! ## C_core — the core comparison, assembled from the slices. -/
+
+/-- **C_core.**  For `pC > pI`, the core comparison
+`PC(k)·pI^k·Bsum(pC) > PI(k)·pC^k·Bsum(pI)` holds.  Via the slice decomposition the
+difference factors as `pC^k·pI^k · Σ_{c≥k} C(n,c)·bracket_c`; the `c=k` term vanishes
+and every `c>k` term is strictly positive by `bracket_pos`, with `c=k+1` present. -/
+lemma C_core (P : Params) (n k : ℕ) (hn : 1 ≤ n) (hk1 : 1 ≤ k) (hk2 : k + 1 ≤ n)
+    (hpc : P.pC > P.pI) :
+    PC P n k * P.pI ^ k * Bsum P n k P.pC
+      > PI P n k * P.pC ^ k * Bsum P n k P.pI := by
+  rw [gt_iff_lt, ← sub_pos]
+  have hid : PC P n k * P.pI ^ k * Bsum P n k P.pC
+      - PI P n k * P.pC ^ k * Bsum P n k P.pI
+      = P.pC ^ k * P.pI ^ k * ∑ c ∈ Finset.Icc k n, (n.choose c : ℝ) *
+          (P.pC ^ (c - k) * Bsum P n c P.pI * Bsum P n k P.pC
+           - P.pI ^ (c - k) * Bsum P n c P.pC * Bsum P n k P.pI) := by
+    rw [PC_slice, PI_slice]
+    simp only [Finset.sum_mul, Finset.mul_sum, ← Finset.sum_sub_distrib]
+    apply Finset.sum_congr rfl
+    intro c hc
+    rw [Finset.mem_Icc] at hc
+    have epc : P.pC ^ c = P.pC ^ k * P.pC ^ (c - k) := by rw [← pow_add]; congr 1; omega
+    have epi : P.pI ^ c = P.pI ^ k * P.pI ^ (c - k) := by rw [← pow_add]; congr 1; omega
+    rw [epc, epi]; ring
+  rw [hid]
+  apply mul_pos (mul_pos (pow_pos P.pC_pos k) (pow_pos P.pI_pos k))
+  have hpeel : Finset.Icc k n = insert k (Finset.Icc (k + 1) n) := by
+    ext x; simp only [Finset.mem_insert, Finset.mem_Icc]; omega
+  rw [hpeel, Finset.sum_insert (by simp only [Finset.mem_Icc]; omega)]
+  rw [show (n.choose k : ℝ) *
+      (P.pC ^ (k - k) * Bsum P n k P.pI * Bsum P n k P.pC
+       - P.pI ^ (k - k) * Bsum P n k P.pC * Bsum P n k P.pI) = 0 from by
+        simp only [Nat.sub_self, pow_zero, one_mul]; ring, zero_add]
+  apply Finset.sum_pos
+  · intro c hc
+    rw [Finset.mem_Icc] at hc
+    apply mul_pos
+    · exact_mod_cast Nat.choose_pos (show c ≤ n by omega)
+    · have hb := bracket_pos P n k c hk1 (by omega) hc.2 hpc
+      linarith
+  · exact ⟨k + 1, Finset.mem_Icc.mpr ⟨le_refl _, hk2⟩⟩
+
 /-! ## Assembly — `MainProp` modulo the single core inequality `C_core`. -/
 
 /-- **Reduction of the conjecture to one inequality.**  Granting `C_core` — that
