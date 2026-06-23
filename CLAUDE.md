@@ -33,6 +33,6 @@ proof.
 
 ## Useful commands
 
-- `lake exe cache get` — fetch prebuilt mathlib (run if `lake build` recompiles mathlib).
+- `lake exe cache get` — fetch prebuilt mathlib (run at the start of every session, before first build).
 - `lake build` — build the project.
 - `bash scripts/check_integrity.sh` — the honesty gate.
