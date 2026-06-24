@@ -1,0 +1,27 @@
+# PROGRESS — lab notebook & lemma tree
+
+Memory across nightly runs. Read at the start of each session, update at the end.
+
+## Target
+
+`theorem main_theorem : MainProp` — <one-line statement of the conjecture>.
+
+## Strategy
+
+<the paper plan: how MainProp decomposes into provable pieces>
+
+## Lemma tree
+
+Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
+
+- [ ] **<lemma_name>** — <statement>.
+  - why: <what it buys us>
+  - depends on: <deps> · status: **TODO**
+
+## Session log
+
+> Newest entry on top. One block per run.
+
+### (seed)
+- Statement frozen. Placeholder `main_theorem` open. Lemma tree above is the plan.
+- First frontier: <independent starting lemmas>.

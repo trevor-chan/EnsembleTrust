@@ -1,0 +1,19 @@
+/-
+  FROZEN CONJECTURE STATEMENT.
+
+  Replace `MainProp` with YOUR conjecture, then freeze it:
+      bash scripts/freeze_statement.sh
+  After freezing, never edit this file -- scripts/check_integrity.sh verifies its
+  checksum and the build fails if it changes.
+
+  The final goal in Main.lean must stay typed exactly `MainProp`.
+-/
+import Mathlib
+
+namespace ConjectureProof
+
+/-- TODO: state the conjecture here. `True` is a placeholder so the skeleton
+    builds before you fill it in. -/
+def MainProp : Prop := True
+
+end ConjectureProof

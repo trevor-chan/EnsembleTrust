@@ -1,61 +1,78 @@
 #!/usr/bin/env bash
-# Cloud-environment setup for the overnight Lean routine.
-# Runs once per environment cache (then cached until this file changes), AFTER the
-# repo is cloned and BEFORE Claude's session starts. CWD is the repo root.
+# Cloud-environment setup script. Runs once per environment cache (AFTER the repo
+# is cloned, BEFORE Claude's session starts); the resulting filesystem is then
+# snapshotted, so later sessions start warm and this does not re-run.
 #
-# Its job: install the Lean toolchain and fetch prebuilt mathlib .olean files so
-# the session never compiles mathlib from source. It FAILS LOUDLY if the oleans
-# do not actually materialize -- a silent "warm" environment that is really empty
-# is what burned us before (`lake exe cache get` exits 0 even on a 100% miss, so a
-# broken fetch used to get cached as success).
+# Job: install the Lean toolchain and provision a complete .lake/packages (source
+# + prebuilt oleans) so the session never compiles mathlib. Two provisioning
+# paths, in order of preference:
+#   1. Restore the pinned dependency artifact published to a GitHub Release
+#      (scripts/deps.lock) -- durable, immune to upstream cache GC / git scope.
+#   2. Fall back to the upstream mathlib olean cache (works until the pinned rev
+#      is GC'd) when no artifact is pinned yet.
+# Either way it FAILS LOUDLY if oleans do not actually materialize, so a broken
+# (empty) environment is never snapshotted as "warm".
 set -euo pipefail
 
-# 1. Install elan (Lean toolchain manager) unless the cache already has it.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/deps_common.sh
+. "$SCRIPT_DIR/deps_common.sh"
+ROOT="$(deps_repo_root)"; cd "$ROOT"
+
+# 1. elan + the toolchain pinned in ./lean-toolchain (elan fetches from
+#    *.lean-lang.org -- keep that host on the network allowlist).
 if [ ! -x "$HOME/.elan/bin/lake" ] && ! command -v lake >/dev/null 2>&1; then
   curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y
 fi
 export PATH="$HOME/.elan/bin:$PATH"
-
-# 2. elan installs the exact Lean version from ./lean-toolchain on first use.
 elan show >/dev/null 2>&1 || true
 
-# 3. Select the cache backend. This mathlib version's default backend is the Azure
-#    mirror (lakecache.blob.core.windows.net), which no longer serves oleans for
-#    this pinned rev; point at the Cloudflare cache instead. The host must be on
-#    the environment's network allowlist (mathlib4.lean-cache.cloud).
-export MATHLIB_CACHE_GET_URL="https://mathlib4.lean-cache.cloud"
+# zstd is needed to unpack the dependency artifact.
+deps_have_zstd || { apt-get update -y && apt-get install -y zstd; } || true
 
-# Drop incomplete/error stubs from any prior failed run. A failed fetch leaves
-# tiny .ltar.part files (404 / BlobNotFound bodies) that otherwise mask retries.
-rm -f "$HOME/.cache/mathlib"/*.ltar.part 2>/dev/null || true
+deps_read_lock "$SCRIPT_DIR/deps.lock"
+CACHE_HOME="$HOME/.deps-cache"
+ART_LOCAL="$CACHE_HOME/${DEPS_ARTIFACT:-lake-packages.tar.zst}"
 
-# 4. Pull prebuilt mathlib oleans. Do NOT trust the exit code (cache get returns 0
-#    on a total miss) -- verify real oleans landed afterward.
-lake exe cache get || true
+restored=0
+# 2. Preferred: restore the pinned release artifact into .lake/packages, keeping
+#    a copy under $HOME (persists across the snapshot) for the SessionStart net.
+if [ -n "${DEPS_RELEASE_TAG:-}" ] && [ -n "${DEPS_ARTIFACT:-}" ]; then
+  echo "Provisioning deps from release ${DEPS_REPO}@${DEPS_RELEASE_TAG} (${DEPS_ARTIFACT})..."
+  if deps_download_artifact "$CACHE_HOME" "$ART_LOCAL" && deps_extract "$ART_LOCAL" "$ROOT"; then
+    restored=1
+  else
+    echo "WARN: release-asset restore failed; falling back to upstream cache." >&2
+  fi
+fi
 
-# 5. Honesty gate: assert mathlib oleans are actually present. If not, fail so this
-#    broken environment is NOT cached as "warm".
-OLEAN_DIR=".lake/packages/mathlib/.lake/build/lib"
-N_OLEAN=$(find "$OLEAN_DIR" -name '*.olean' 2>/dev/null | head -2000 | wc -l)
-if [ "$N_OLEAN" -lt 100 ]; then
-  echo "FATAL: mathlib cache fetch produced $N_OLEAN oleans (expected thousands)." >&2
-  echo "  The environment is NOT warm; failing so the broken state is not cached." >&2
-  echo "  Likely causes:" >&2
-  echo "   (a) mathlib (and its dep repos) are not in the environment's source scope," >&2
-  echo "       so 'lake' cannot git-clone them (git is gated by repo scope, not the" >&2
-  echo "       network allowlist); or" >&2
-  echo "   (b) MATHLIB_CACHE_GET_URL host is not allowlisted, or no longer serves" >&2
-  echo "       oleans for this pinned mathlib rev (cache aged out)." >&2
+# 3. Fallback: upstream mathlib olean cache (Cloudflare; the Azure default no
+#    longer serves this pinned rev).
+if [ "$restored" != 1 ]; then
+  export MATHLIB_CACHE_GET_URL="${MATHLIB_CACHE_GET_URL:-https://mathlib4.lean-cache.cloud}"
+  rm -f "$HOME/.cache/mathlib"/*.ltar.part 2>/dev/null || true
+  lake exe cache get || true   # exits 0 even on a total miss -- assert below
+fi
+
+# 4. Honesty gate: real oleans must be present, else fail so the broken state is
+#    not cached.
+N_OLEAN="$(deps_olean_count "$ROOT")"
+if [ "${N_OLEAN:-0}" -lt 100 ]; then
+  echo "FATAL: only ${N_OLEAN:-0} mathlib oleans present after provisioning." >&2
+  echo "  - If using a pinned artifact: check scripts/deps.lock (tag/sha/parts) and" >&2
+  echo "    that the release asset exists and is reachable from this environment." >&2
+  echo "  - If using the upstream-cache fallback: the pinned rev may have been GC'd." >&2
+  echo "    Run scripts/bootstrap_deps.sh locally to publish your own artifact." >&2
   exit 1
 fi
-echo "OK: $N_OLEAN mathlib oleans present."
+echo "OK: ${N_OLEAN} mathlib oleans present."
 
-# 6. Warm the project build (cheap once mathlib oleans are present; surfaces issues
-#    early). Left non-fatal: a project-level error is for the session to fix.
+# 5. Warm the project build (cheap once oleans are present). Non-fatal: a
+#    project-level error is for the session to fix, not setup.
 lake build || true
 
-# 7. Make `lake` visible to the session shell (belt and suspenders).
+# 6. Make lake visible to the session shell.
 LINE='export PATH="$HOME/.elan/bin:$PATH"'
 [ -n "${CLAUDE_ENV_FILE:-}" ] && echo "$LINE" >> "$CLAUDE_ENV_FILE"
-echo "$LINE" >> "$HOME/.bashrc"
-echo "$LINE" >> "$HOME/.profile"
+echo "$LINE" >> "$HOME/.bashrc" 2>/dev/null || true
+echo "$LINE" >> "$HOME/.profile" 2>/dev/null || true
