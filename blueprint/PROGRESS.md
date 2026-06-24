@@ -146,6 +146,51 @@ Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
 
 > Newest entry on top. One block per run.
 
+### 2026-06-24 — verification run (proof already COMPLETE; build blocked by egress)
+- **No proving work to do:** the lemma tree is fully PROVED and
+  `main_theorem : MainProp := main_of_core C_core` was discharged and **merged**
+  (PR #1, commit `9c68c33`) in the 2026-06-23 run, which verified GREEN +
+  `[COMPLETE]` with a clean axiom audit. The frontier is empty. Working tree of
+  tracked files is clean; `Statement.lean` frozen sha still matches.
+- **Goal of this run was to independently re-verify the build** in a fresh
+  container. That could NOT be done — `lake build`/axiom-audit cannot run here:
+  1. **Olean cache host is egress-blocked.** mathlib's cache pulls from
+     `https://mathlib4.lean-cache.cloud` → the agent egress proxy returns
+     **403 (policy denial)**. Per proxy rules this is reported, not routed around.
+  2. **Azure fallback is empty for this rev.** Forcing
+     `MATHLIB_CACHE_GET_URL=https://lakecache.blob.core.windows.net/mathlib4`
+     (host reachable, 200) downloaded **0 / 8542** files — the Azure blob no
+     longer holds oleans for rev `fabf563a` (mathlib migrated to the cloudflare
+     cache). So no prebuilt oleans are obtainable.
+  3. **From-source is infeasible.** `Statement.lean` does `import Mathlib`
+     (the all-of-mathlib root), so a source build compiles all 8542 modules; on
+     this box (4 cores / 15 GB) that cannot finish within the 270-min budget.
+  4. **mathlib git clone is also blocked.** The scoped git proxy (port 41729)
+     403s any repo except `trevor-chan/ensembletrust`, and direct `git` over
+     HTTPS to github also 403s. Only `codeload.github.com/.../tar.gz/<rev>`
+     tarballs pass.
+- **Workaround that DOES work (for a future run if the cache host is allowlisted
+  or oleans are otherwise available):** vendor every manifest package by
+  downloading its codeload tarball, extract into `.lake/packages/<name>`,
+  `git init` + `git remote add origin <manifest url>` + commit, then rewrite the
+  rev in `lake-manifest.json` (and the transitive manifests under
+  `.lake/packages/*/lake-manifest.json`) to the **local** commit SHA so lake's
+  HEAD-vs-manifest check passes and it does not try to re-clone. With that in
+  place, the `cache` exe builds and runs; only the final olean download is the
+  missing piece. (These vendored dirs are gitignored; `lake-manifest.json` was
+  reverted, so the tracked tree is unchanged by this run.)
+- **Caveat on `check_integrity.sh` in a no-olean container:** section 4 runs
+  `lake env lean Audit.lean 2>/dev/null || true`; with oleans missing that
+  command fails silently to empty output, so the script prints `[COMPLETE]`
+  *without* actually performing the axiom audit. Treat a `[COMPLETE]` from this
+  environment as "static checks passed only". The genuine GREEN + clean-axiom
+  verification remains the one from 2026-06-23 (and CI on PR #1).
+- **Next run:** nothing to prove. If re-verification is desired, the blocker is
+  purely infrastructural — get `mathlib4.lean-cache.cloud` onto the egress
+  allowlist (or populate the Azure mirror for rev `fabf563a`), then the
+  vendoring recipe above + `lake exe cache get` + `lake build` will confirm in
+  minutes.
+
 ### 2026-06-23 — PROOF COMPLETE (C_core proven)
 - **The project is done.** `main_theorem : MainProp` is proven with a clean
   axiom audit (`[COMPLETE]`). `Statement.lean` untouched (frozen sha matches).

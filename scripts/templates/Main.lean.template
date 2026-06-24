@@ -1,0 +1,16 @@
+/-
+  FINAL GOAL. This holds the ONE sanctioned placeholder until it is discharged
+  from lemmas in Lemmas.lean. Never introduce another placeholder anywhere, and
+  never change the type away from `MainProp`.
+
+  "Done" = this `sorry` is replaced by a real proof and the axiom audit is clean.
+-/
+import ConjectureProof.Statement
+import ConjectureProof.Lemmas
+
+namespace ConjectureProof
+
+theorem main_theorem : MainProp := by
+  sorry
+
+end ConjectureProof

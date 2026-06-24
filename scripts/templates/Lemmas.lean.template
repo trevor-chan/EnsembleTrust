@@ -1,0 +1,12 @@
+/-
+  Supporting lemmas. These must be FULLY PROVEN at every commit -- never leave a
+  `sorry`/`admit` here (only Main.lean may hold the single sanctioned placeholder).
+-/
+import ConjectureProof.Statement
+
+namespace ConjectureProof
+
+-- Add frontier lemmas here, proving them one at a time. Record progress in
+-- blueprint/PROGRESS.md.
+
+end ConjectureProof

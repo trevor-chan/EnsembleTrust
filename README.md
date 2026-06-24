@@ -41,6 +41,16 @@ git add -A && git commit -m "Freeze conjecture statement" && git push
    or elan install is blocked, allowlist the host shown in the log under the
    environment's network access.
 
+## Reusing this as a skeleton for a new conjecture
+
+This repo is also a reusable harness. Dependencies are provisioned from a
+prebuilt `.lake/packages` artifact you publish as a GitHub Release asset (durable
+against upstream cache GC and git-clone scope), and problem-specific files are
+swapped via templates. See [`SKELETON.md`](SKELETON.md) for the full lifecycle:
+`scripts/bootstrap_deps.sh` (build + publish deps), `scripts/setup_env.sh`
+(restore on cloud startup), and `scripts/new_problem.sh` + `freeze_statement.sh`
+(swap in a new conjecture).
+
 ## The honesty gate
 
 `scripts/check_integrity.sh` fails the build if: the statement file changed, any
