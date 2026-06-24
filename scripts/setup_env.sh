@@ -15,8 +15,33 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# When the remote runner copies this script to /tmp/init-script-*.sh, SCRIPT_DIR
+# is /tmp and deps_common.sh isn't there.  Search progressively wider until found.
+_locate_deps_common() {
+  # 1. Script lives in the repo's scripts/ dir (local run or in-place remote run)
+  [ -f "$SCRIPT_DIR/deps_common.sh" ] && { echo "$SCRIPT_DIR/deps_common.sh"; return 0; }
+  # 2. CWD is the repo root (runner cd'd to repo before executing)
+  [ -f "$PWD/scripts/deps_common.sh" ] && { echo "$PWD/scripts/deps_common.sh"; return 0; }
+  # 3. git root (we're somehow inside the repo tree)
+  local gr; gr="$(git rev-parse --show-toplevel 2>/dev/null)" && \
+    [ -f "$gr/scripts/deps_common.sh" ] && { echo "$gr/scripts/deps_common.sh"; return 0; }
+  # 4. Common clone locations used by CI / remote agents
+  for d in "$HOME/repo" "$HOME/workspace" "/workspace" "/repo" "/home/user/repo"; do
+    [ -f "$d/scripts/deps_common.sh" ] && { echo "$d/scripts/deps_common.sh"; return 0; }
+  done
+  # 5. Last-resort bounded search (fast: max depth 6, skips large dirs)
+  find /home /root /workspace /repo -maxdepth 6 \
+    -name 'deps_common.sh' -path '*/scripts/deps_common.sh' 2>/dev/null | head -1
+}
+
+DEPS_COMMON="$(_locate_deps_common)"
+if [ -z "$DEPS_COMMON" ]; then
+  echo "FATAL: cannot locate scripts/deps_common.sh (SCRIPT_DIR=$SCRIPT_DIR, PWD=$PWD)" >&2
+  exit 1
+fi
 # shellcheck source=scripts/deps_common.sh
-. "$SCRIPT_DIR/deps_common.sh"
+. "$DEPS_COMMON"
 ROOT="$(deps_repo_root)"; cd "$ROOT"
 
 # 1. elan + the toolchain pinned in ./lean-toolchain (elan fetches from
@@ -30,7 +55,7 @@ elan show >/dev/null 2>&1 || true
 # zstd is needed to unpack the dependency artifact.
 deps_have_zstd || { apt-get update -y && apt-get install -y zstd; } || true
 
-deps_read_lock "$SCRIPT_DIR/deps.lock"
+deps_read_lock "$ROOT/scripts/deps.lock"
 CACHE_HOME="$HOME/.deps-cache"
 ART_LOCAL="$CACHE_HOME/${DEPS_ARTIFACT:-lake-packages.tar.zst}"
 
