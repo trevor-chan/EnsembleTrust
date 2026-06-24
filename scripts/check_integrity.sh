@@ -69,6 +69,16 @@ if command -v lake >/dev/null 2>&1; then
     echo "X FAIL: main_theorem is placeholder-free in source but depends on sorryAx."
     exit 1
   fi
+  # The audit must actually have RUN. With mathlib oleans missing (e.g. a cold
+  # container where `lake exe cache get` fetched nothing), `lake env lean` errors
+  # to empty output -- which would otherwise fall through to a false [COMPLETE].
+  # A genuine audit always prints the axiom list, which includes `propext`.
+  if ! echo "$AX" | grep -q 'propext'; then
+    echo "[CANNOT VERIFY] axiom audit did not run (no build/oleans available)."
+    echo "   Source-level checks passed, but done-ness is NOT asserted. The real"
+    echo "   verification is the merged proof / CI, where mathlib oleans are present."
+    exit 0
+  fi
   echo "[COMPLETE] main_theorem proven."
   echo "   Confirm the axiom list is only: propext, Classical.choice, Quot.sound."
 else
