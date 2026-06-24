@@ -1,16 +1,9 @@
-# Pinned Lean/mathlib dependency artifact.
-#
-# Source of truth for which prebuilt dependency snapshot the cloud setup script
-# restores. Written by scripts/bootstrap_deps.sh; commit it alongside
-# lean-toolchain / lakefile.toml / lake-manifest.json so code and oleans match.
-#
-# While DEPS_RELEASE_TAG is empty, scripts/setup_env.sh falls back to the upstream
-# mathlib olean cache (works until the pinned rev is garbage-collected). Run
-# scripts/bootstrap_deps.sh once to publish your own artifact and fill these in.
+# Pinned Lean/mathlib dependency artifact. Written by scripts/bootstrap_deps.sh.
+# scripts/setup_env.sh restores the release asset named here on cloud startup.
 LEAN_TOOLCHAIN=leanprover/lean4:v4.31.0
 MATHLIB_REV=fabf563a7c95a166b8d7b6efca11c8b4dc9d911f
 DEPS_REPO=trevor-chan/EnsembleTrust
-DEPS_RELEASE_TAG=
-DEPS_ARTIFACT=
-DEPS_ARTIFACT_SHA256=
-DEPS_ARTIFACT_PARTS=1
+DEPS_RELEASE_TAG=deps-v4.31.0
+DEPS_ARTIFACT=lake-packages-v4.31.0.tar.zst
+DEPS_ARTIFACT_SHA256=401e9c170a157170f7035a1ebc25fa63c29fb268b723d07a7952e92b89d7e1c8
+DEPS_ARTIFACT_PARTS=2
