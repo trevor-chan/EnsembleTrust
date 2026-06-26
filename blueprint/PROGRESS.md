@@ -146,6 +146,53 @@ Status legend: TODO · ATTEMPTED · BLOCKED · PROVED
 
 > Newest entry on top. One block per run.
 
+### 2026-06-26 — INDEPENDENT RE-VERIFICATION SUCCEEDED (fresh container, full build + axiom audit)
+- **No proving work to do** — the lemma tree is fully PROVED and `main_theorem :
+  MainProp := main_of_core C_core` was discharged and merged in the 2026-06-23
+  run. Frontier empty; `Statement.lean` frozen sha matches; `Lemmas.lean` has 0
+  `sorry`/`admit`. This run's goal was the re-verification the 2026-06-24 run
+  could NOT do — and **this time it succeeded, for real**:
+  - `lake build` → **GREEN**, `Build completed successfully (8562 jobs)`. The
+    project modules (`Statement`, `Lemmas`, `Main`, `ConjectureProof`) compiled
+    on top of **genuine prebuilt mathlib oleans** (8176+ present), not an empty
+    no-olean tree. Only a benign linter warning (unused `hn` at Lemmas.lean:643).
+  - **Axiom audit actually ran** against real oleans (`Audit.lean` compiled):
+    `'ConjectureProof.main_theorem' depends on axioms: [propext,
+    Classical.choice, Quot.sound]` — exactly the three permitted, **no `sorryAx`,
+    no custom axiom**. `check_integrity.sh` → `[COMPLETE]`, exit 0. Unlike the
+    2026-06-24 no-olean caveat, this `[COMPLETE]` reflects a true audit.
+- **What unblocked it:** since 2026-06-24, a durable pinned deps artifact was
+  published (`scripts/deps.lock` → release `deps-v4.31.0`, asset
+  `lake-packages-v4.31.0.tar.zst`, 2 parts, ~1.9 GB). It is reachable from this
+  environment (GitHub release host returns 200), so `setup_env.sh` provisions a
+  complete `.lake/packages` (source + oleans) with NO dependence on the
+  egress-blocked `mathlib4.lean-cache.cloud`. This is exactly the durability the
+  artifact was designed for.
+- **One environment gotcha worth recording for future runs** (cost ~real time
+  this session): the vendored packages in the artifact have their git `origin`
+  set to the **scoped git proxy** URL
+  (`http://local_proxy@127.0.0.1:<port>/git/<scope>/<repo>`), while
+  `lake-manifest.json` lists the canonical `https://github.com/<scope>/<repo>`.
+  On `lake build`, lake sees "URL has changed", **deletes `.lake/packages/mathlib`
+  and tries to re-clone from github** — which the scoped proxy 403s (only
+  `trevor-chan/ensembletrust` is in git scope) — leaving mathlib gone and the
+  build red. **Fix (no network):** after extracting the artifact, rewrite every
+  package's origin back to the canonical github URL, e.g. for each
+  `.lake/packages/*`: `git remote set-url origin` replacing
+  `http://local_proxy@127.0.0.1:<port>/git/` with `https://github.com/`. A global
+  `insteadOf` rule still rewrites github→proxy for actual fetches, so
+  `git remote -v` shows the proxy form, but the raw `remote.origin.url` config
+  (what lake compares) now matches the manifest and lake leaves the packages
+  alone. Also need `git config --global --add safe.directory '*'` (packages are
+  root-owned). With those two fixes, `lake build` is a quick project-only compile.
+  **Recommendation:** fold the origin-URL rewrite into `setup_env.sh` /
+  `restore_deps.sh` right after `deps_extract`, so future sessions don't hit the
+  mathlib-deletion trap.
+- **Conclusion:** the conjecture is confirmed **fully formally proven** by an
+  independent fresh-container build + clean axiom audit. Nothing to prove or
+  change in the Lean sources. Next run: still nothing to prove; if re-verifying,
+  apply the origin-URL fix above (or wait for it to be folded into setup).
+
 ### 2026-06-24 — verification run (proof already COMPLETE; build blocked by egress)
 - **No proving work to do:** the lemma tree is fully PROVED and
   `main_theorem : MainProp := main_of_core C_core` was discharged and **merged**
